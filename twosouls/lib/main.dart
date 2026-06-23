@@ -21,11 +21,7 @@ class TwoSoulsApp extends StatelessWidget {
           brightness: Brightness.dark,
         ),
       ),
-      initialRoute: '/',
-      routes: {
-        '/': (context) => const LoginScreen(),
-        '/home': (context) => const Placeholder(),
-      },
+      home: const LoginScreen(),
     );
   }
 }
