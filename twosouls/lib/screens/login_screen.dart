@@ -87,23 +87,20 @@ class _LoginScreenState extends State<LoginScreen> {
                 children: [
                   const Spacer(),
 
-                  const Icon(
-                    Icons.favorite_border,
-                    size: 58,
-                    color: Colors.white,
-                  ),
 
-                  const SizedBox(height: 10),
-
-                  const Text(
-                    '2souls',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 50,
-                      fontWeight: FontWeight.w300,
-                      letterSpacing: 4,
-                    ),
+                  Transform.translate(
+                    offset: const Offset(0, -40),
+                    child: const Text(
+                      '2souls',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 50,
+                        fontWeight: FontWeight.w300,
+                        letterSpacing: 4,
+                      ),
                   ),
+              ),
+
 
                   const SizedBox(height: 8),
 
