@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'screens/login_screen.dart';
 import 'theme/app_colors.dart';
+import 'screens/signup_screen.dart';
+import 'screens/signup_dob_screen.dart';
 
 void main() {
   runApp(const TwoSoulsApp());
@@ -21,7 +23,14 @@ class TwoSoulsApp extends StatelessWidget {
           brightness: Brightness.dark,
         ),
       ),
-      home: const LoginScreen(),
+      initialRoute: '/',
+
+      routes: {
+        '/': (context) => const LoginScreen(),
+        '/signup': (context) => const SignupScreen(),
+        '/signup-dob': (context) => const SignupDobScreen(),
+        '/home': (context) => const Placeholder(),
+      },
     );
   }
 }
