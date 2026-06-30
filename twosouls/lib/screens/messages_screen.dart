@@ -1,28 +1,30 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../widgets/bottom_nav.dart';
+import '../widgets/floor_cards_background.dart';
 import '../theme/app_colors.dart';
 import '../models/card_rarity_model.dart';
 import '../models/match_pool.dart';
 import 'profile_screen.dart' show RarityTierVisuals, wearAdjustedGradient;
 
 // ---------------------------------------------------------------------------
-// CollectionsScreen (route/class name MessagesScreen kept for main.dart
-// compatibility — this is the screen shown on the "Collections" bottom-nav
-// tab.)
+// CardsScreen (route/class name MessagesScreen kept for main.dart
+// compatibility — this is the screen shown on the "Cards" bottom-nav tab,
+// previously labelled "Messages"/"Collections".)
 //
 // Layout:
 //   1. CHATS — exactly 3 fixed slots (Priority, 2nd, 3rd). A claimed match
-//      is added here via the "Add to Chats" action (see _CardActionSheet),
-//      with a Clash Royale-style "slot into the deck" animation. Once in
-//      a chat slot, tapping the card opens a menu with "Open Chat" or
-//      "Demote" (removes it from the chat slot, pushing it back down into
-//      the general Collections pool).
-//   2. COLLECTIONS — every other claimed match not yet in a chat slot,
-//      grouped by rarity tier. A match claimed but not moved into Chats
-//      within 24h is automatically removed (re-entered into the dating
-//      pool) — enforced via CollectionStore.sweepExpired(), run on a
-//      periodic timer (NOT during build — see _MessagesScreenState).
+//      is added here via the "Add to Chats" action (see
+//      _UnplacedActionSheet), with a Clash Royale-style "slot into the
+//      deck" pop-in animation. Slots can be long-press dragged to reorder
+//      between the 3 positions, or dragged from the general Cards pool
+//      below to fill an empty slot. Once in a chat slot, tapping the card
+//      opens a menu with "Open Chat" or "Demote".
+//   2. CARDS — every other claimed match not yet in a chat slot, grouped
+//      by rarity tier, also long-press draggable into any chat slot. A
+//      match claimed but not moved into Chats within 24h is automatically
+//      removed — enforced via CollectionStore.sweepExpired(), run on a
+//      periodic timer (never during build()).
 //
 // Tapping an unplaced card opens a 3-option sheet: Discard, Add to Chats,
 // View Profile. Tapping a card already in a Chats slot opens a 2-option
@@ -103,6 +105,14 @@ class CollectionStore extends ChangeNotifier {
     _notifySafely();
   }
 
+  /// Adds a specific, already-known MatchEntry directly — used by
+  /// DiscoverScreen when accepting someone who unpacked the current user
+  /// (not a pool draw, so there's no MatchCandidate to convert).
+  void addEntryDirectly(MatchEntry entry) {
+    matches.add(entry);
+    _notifySafely();
+  }
+
   /// Moves a match into the given chat slot. If that slot already holds
   /// someone, they're simply removed from `chats` (and reappear in the
   /// general Collections pool, still subject to their own 24h expiry).
@@ -110,6 +120,15 @@ class CollectionStore extends ChangeNotifier {
     final slot = preferredSlot ?? chats.indexWhere((c) => c == null);
     if (slot == -1) return; // no empty slot and none specified — no-op
     chats[slot] = entry;
+    _notifySafely();
+  }
+
+  /// Swaps the contents of two chat slots — used when dragging a card
+  /// from one slot directly onto another to reorder them.
+  void swapChatSlots(int a, int b) {
+    final tmp = chats[a];
+    chats[a] = chats[b];
+    chats[b] = tmp;
     _notifySafely();
   }
 
@@ -276,6 +295,23 @@ class _MessagesScreenState extends State<MessagesScreen> {
     );
   }
 
+  /// Drag-and-drop: dropping an unplaced card (or a card from another
+  /// slot) onto an empty or occupied chat slot. If the slot already has
+  /// someone, they're displaced back into the general Cards pool.
+  void _handleDropIntoSlot(int slot, MatchEntry entry) {
+    setState(() => _justAddedId = entry.id);
+    CollectionStore.instance.addToChats(entry, preferredSlot: slot);
+    Future.delayed(const Duration(milliseconds: 900), () {
+      if (mounted) setState(() => _justAddedId = null);
+    });
+  }
+
+  /// Drag-and-drop: dragging a card from one chat slot directly onto
+  /// another chat slot swaps their positions.
+  void _handleSwapSlots(int fromSlot, int toSlot) {
+    CollectionStore.instance.swapChatSlots(fromSlot, toSlot);
+  }
+
   @override
   Widget build(BuildContext context) {
     final store = CollectionStore.instance;
@@ -305,32 +341,41 @@ class _MessagesScreenState extends State<MessagesScreen> {
           children: [
             _Header(matchCount: store.matches.length),
             Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(14, 12, 14, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _ChatsSection(
-                      chats: store.chats,
-                      justAddedId: _justAddedId,
-                      onTapSlot: _showChatActions,
+              child: Stack(
+                children: [
+                  const Positioned.fill(
+                    child: IgnorePointer(child: FloorCardsBackground(seed: 2)),
+                  ),
+                  SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _ChatsSection(
+                          chats: store.chats,
+                          justAddedId: _justAddedId,
+                          onTapSlot: _showChatActions,
+                          onDropIntoSlot: _handleDropIntoSlot,
+                          onSwapSlots: _handleSwapSlots,
+                        ),
+                        const SizedBox(height: 22),
+                        if (unplacedMatches.isEmpty && store.matches.isEmpty)
+                          const _EmptyState()
+                        else
+                          ...tierOrder
+                              .where((t) => grouped.containsKey(t))
+                              .map(
+                                (tier) => _TierSection(
+                                  tier: tier,
+                                  matches: grouped[tier]!,
+                                  onTapCard: _showUnplacedActions,
+                                ),
+                              ),
+                      ],
                     ),
-                    const SizedBox(height: 22),
-                    if (unplacedMatches.isEmpty && store.matches.isEmpty)
-                      const _EmptyState()
-                    else
-                      ...tierOrder
-                          .where((t) => grouped.containsKey(t))
-                          .map(
-                            (tier) => _TierSection(
-                              tier: tier,
-                              matches: grouped[tier]!,
-                              onTapCard: _showUnplacedActions,
-                            ),
-                          ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -359,7 +404,7 @@ class _Header extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           const Text(
-            'COLLECTIONS',
+            'CARDS',
             style: TextStyle(
               color: AppColors.gold,
               fontSize: 13,
@@ -432,23 +477,29 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-// ── Chats: 3 fixed slots (tap-driven, no drag-and-drop) ──────────────────
-// Drag-and-drop reordering was removed — it was the source of a freeze
-// bug caused by DragTarget rebuilding on every pointer-move event while
-// also racing with CollectionStore notifications. Tap-based actions (Add
-// to Chats / Demote, via action sheets) achieve the same outcome more
-// reliably and match the new "Clash Royale add-to-deck" interaction model
-// you asked for.
+// ── Chats: 3 fixed slots, long-press draggable to reorder ────────────────
+// Uses LongPressDraggable (requires a deliberate hold before a drag
+// starts) rather than a plain Draggable, so casual taps/scrolls never
+// accidentally trigger a drag. DragTarget.onWillAcceptWithDetails only
+// returns true for genuinely different sources (not constantly true),
+// and all state mutation happens inside onAcceptWithDetails via
+// CollectionStore methods that already defer their notifyListeners() to
+// the next frame — this combination is what makes the drag safe and
+// freeze-free, unlike the earlier unconditional-accept implementation.
 
 class _ChatsSection extends StatelessWidget {
   final List<MatchEntry?> chats;
   final String? justAddedId;
   final void Function(MatchEntry entry) onTapSlot;
+  final void Function(int slot, MatchEntry entry) onDropIntoSlot;
+  final void Function(int fromSlot, int toSlot) onSwapSlots;
 
   const _ChatsSection({
     required this.chats,
     required this.justAddedId,
     required this.onTapSlot,
+    required this.onDropIntoSlot,
+    required this.onSwapSlots,
   });
 
   static const _slotLabels = ['PRIORITY', '2ND', '3RD'];
@@ -484,7 +535,7 @@ class _ChatsSection extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.only(left: 12),
           child: Text(
-            'Tap a match below and choose "Add to Chats" \u2014 slot 1 is your top priority.',
+            'Hold and drag a card to reorder, or drag one up from below \u2014 slot 1 is your top priority.',
             style: TextStyle(
               color: AppColors.textSecondary.withOpacity(0.7),
               fontSize: 11,
@@ -504,6 +555,15 @@ class _ChatsSection extends StatelessWidget {
                   entry: entry,
                   justAdded: entry != null && entry.id == justAddedId,
                   onTap: entry == null ? null : () => onTapSlot(entry),
+                  onAcceptDrop: (payload) {
+                    if (payload.fromChatSlot != null) {
+                      if (payload.fromChatSlot != i) {
+                        onSwapSlots(payload.fromChatSlot!, i);
+                      }
+                    } else {
+                      onDropIntoSlot(i, payload.entry);
+                    }
+                  },
                 ),
               ),
             );
@@ -520,6 +580,7 @@ class _ChatSlot extends StatelessWidget {
   final MatchEntry? entry;
   final bool justAdded;
   final VoidCallback? onTap;
+  final void Function(_DragPayload payload) onAcceptDrop;
 
   const _ChatSlot({
     required this.index,
@@ -527,6 +588,7 @@ class _ChatSlot extends StatelessWidget {
     required this.entry,
     required this.justAdded,
     required this.onTap,
+    required this.onAcceptDrop,
   });
 
   @override
@@ -543,39 +605,83 @@ class _ChatSlot extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 6),
-        Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: entry != null
-                  ? entry!.tier.primaryColor.withOpacity(0.5)
-                  : AppColors.panelBorder,
-              width: 1.2,
-            ),
-          ),
-          child: AspectRatio(
-            aspectRatio: 0.72,
-            child: entry == null
-                ? const _EmptySlotContent()
-                : GestureDetector(
-                    onTap: onTap,
-                    child: TweenAnimationBuilder<double>(
-                      // Clash Royale "slot into the deck" pop: scales up
-                      // from 0 with an overshoot bounce when justAdded
-                      // flips true, then settles at 1.0.
-                      tween: Tween(begin: justAdded ? 0.0 : 1.0, end: 1.0),
-                      duration: const Duration(milliseconds: 550),
-                      curve: Curves.elasticOut,
-                      builder: (context, scale, child) =>
-                          Transform.scale(scale: scale, child: child),
-                      child: _MiniMatchCard(entry: entry!),
-                    ),
-                  ),
-          ),
+        DragTarget<_DragPayload>(
+          onWillAcceptWithDetails: (details) {
+            // Reject drops from this exact slot onto itself — every other
+            // source (another slot, or an unplaced card) is accepted.
+            return details.data.fromChatSlot != index;
+          },
+          onAcceptWithDetails: (details) => onAcceptDrop(details.data),
+          builder: (context, candidateData, rejectedData) {
+            final isHovering = candidateData.isNotEmpty;
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: isHovering
+                      ? AppColors.gold
+                      : (entry != null
+                            ? entry!.tier.primaryColor.withOpacity(0.5)
+                            : AppColors.panelBorder),
+                  width: isHovering ? 2.2 : 1.2,
+                ),
+                color: isHovering
+                    ? AppColors.gold.withOpacity(0.08)
+                    : Colors.transparent,
+              ),
+              child: AspectRatio(
+                aspectRatio: 0.72,
+                child: entry == null
+                    ? const _EmptySlotContent()
+                    : LongPressDraggable<_DragPayload>(
+                        data: _DragPayload(entry: entry!, fromChatSlot: index),
+                        delay: const Duration(milliseconds: 250),
+                        feedback: Material(
+                          color: Colors.transparent,
+                          child: SizedBox(
+                            width: 90,
+                            child: _MiniMatchCard(entry: entry!),
+                          ),
+                        ),
+                        childWhenDragging: Opacity(
+                          opacity: 0.3,
+                          child: _MiniMatchCard(entry: entry!),
+                        ),
+                        child: GestureDetector(
+                          onTap: onTap,
+                          child: TweenAnimationBuilder<double>(
+                            // Clash Royale "slot into the deck" pop: scales
+                            // up from 0 with an overshoot bounce when
+                            // justAdded flips true, then settles at 1.0.
+                            tween: Tween(
+                              begin: justAdded ? 0.0 : 1.0,
+                              end: 1.0,
+                            ),
+                            duration: const Duration(milliseconds: 550),
+                            curve: Curves.elasticOut,
+                            builder: (context, scale, child) =>
+                                Transform.scale(scale: scale, child: child),
+                            child: _MiniMatchCard(entry: entry!),
+                          ),
+                        ),
+                      ),
+              ),
+            );
+          },
         ),
       ],
     );
   }
+}
+
+/// Carries a dragged match plus which chat slot (if any) it came from, so
+/// a DragTarget's onAcceptWithDetails can tell whether this is a reorder
+/// (slot -> slot) or a promotion (general Cards pool -> slot).
+class _DragPayload {
+  final MatchEntry entry;
+  final int? fromChatSlot;
+  const _DragPayload({required this.entry, this.fromChatSlot});
 }
 
 class _EmptySlotContent extends StatelessWidget {
@@ -755,37 +861,56 @@ class _CollectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: SizedBox(
-        width: 78,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AspectRatio(aspectRatio: 0.68, child: _MiniMatchCard(entry: match)),
-            const SizedBox(height: 4),
-            Text(
-              match.name,
-              style: const TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+    return LongPressDraggable<_DragPayload>(
+      data: _DragPayload(entry: match, fromChatSlot: null),
+      delay: const Duration(milliseconds: 250),
+      feedback: Material(
+        color: Colors.transparent,
+        child: SizedBox(width: 90, child: _MiniMatchCard(entry: match)),
+      ),
+      childWhenDragging: Opacity(opacity: 0.3, child: _CardLabel(match: match)),
+      child: GestureDetector(
+        onTap: onTap,
+        child: _CardLabel(match: match),
+      ),
+    );
+  }
+}
+
+class _CardLabel extends StatelessWidget {
+  final MatchEntry match;
+  const _CardLabel({required this.match});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 78,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AspectRatio(aspectRatio: 0.68, child: _MiniMatchCard(entry: match)),
+          const SizedBox(height: 4),
+          Text(
+            match.name,
+            style: const TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
             ),
-            Text(
-              match.wear.label,
-              style: TextStyle(
-                color: match.tier.primaryColor.withOpacity(0.8),
-                fontSize: 8,
-                fontWeight: FontWeight.w600,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          Text(
+            match.wear.label,
+            style: TextStyle(
+              color: match.tier.primaryColor.withOpacity(0.8),
+              fontSize: 8,
+              fontWeight: FontWeight.w600,
             ),
-          ],
-        ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     );
   }

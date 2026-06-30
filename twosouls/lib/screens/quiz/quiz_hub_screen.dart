@@ -1,44 +1,27 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/floor_cards_background.dart';
 import '../../models/match_pool.dart';
 import '../../models/match_limits.dart';
-import '../../models/profile_completion.dart';
 import '../case_opening/case_opening_screen.dart';
 import '../top_match/top_match_screen.dart';
 import '../messages_screen.dart' show CollectionStore;
-import 'quiz_screen.dart';
 
 // ---------------------------------------------------------------------------
 // QuizHubScreen
 //
-// Shown after picking "Long Term" on RelationshipTypeScreen. Layout, top
-// to bottom:
+// Shown after picking "Long Term" on RelationshipTypeScreen. Layout:
 //   1. TOP MATCH box — randomly reveals a candidate at 80%+ compatibility
 //      with a FIFA-style "card unpacked" walkout animation. Limited to
 //      once per 7 days (MatchLimits.kTopMatchWindow).
 //   2. OPEN CASE box — the original gambling-style draw, limited to 2
 //      opens per rolling 24h window (MatchLimits.kMaxCasesPerDay).
-//   3. A square, rounded "COMPLETED X/5" progress box. Tapping it expands
-//      and navigates to the Profile tab, where the user can finish
-//      whatever's left (bio, photos, quizzes). Once everything is
-//      complete, this box disappears from the hub entirely.
+//
+// The 5-quiz "Completed X/5" box that used to live here has been removed
+// permanently — quizzes are only ever started from the checklist sheet on
+// the Profile screen now (see profile_screen.dart's
+// _CompletionChecklistSheet).
 // ---------------------------------------------------------------------------
-
-class _QuizCategoryInfo {
-  final String title;
-  final String description;
-  final IconData icon;
-  final Color color;
-  final List<QuizTest> tests;
-
-  const _QuizCategoryInfo({
-    required this.title,
-    required this.description,
-    required this.icon,
-    required this.color,
-    required this.tests,
-  });
-}
 
 class QuizHubScreen extends StatefulWidget {
   const QuizHubScreen({super.key});
@@ -48,76 +31,22 @@ class QuizHubScreen extends StatefulWidget {
 }
 
 class _QuizHubScreenState extends State<QuizHubScreen> {
-  final _completionStore = ProfileCompletionStore.instance;
   final _limits = MatchLimits.instance;
 
   @override
   void initState() {
     super.initState();
-    _completionStore.addListener(_onChanged);
     _limits.addListener(_onChanged);
   }
 
   @override
   void dispose() {
-    _completionStore.removeListener(_onChanged);
     _limits.removeListener(_onChanged);
     super.dispose();
   }
 
   void _onChanged() {
     if (mounted) setState(() {});
-  }
-
-  List<_QuizCategoryInfo> get _categories => [
-    _QuizCategoryInfo(
-      title: 'Hobbies',
-      description: 'What you actually like spending time on',
-      icon: Icons.sports_esports_outlined,
-      color: const Color(0xFF3D74FF),
-      tests: kCoreValuesQuizTests, // placeholder shared content for now
-    ),
-    _QuizCategoryInfo(
-      title: 'Career & Education',
-      description: 'Where you\u2019re headed professionally',
-      icon: Icons.work_outline,
-      color: AppColors.textSecondary,
-      tests: kCoreValuesQuizTests,
-    ),
-    _QuizCategoryInfo(
-      title: 'Looks',
-      description: 'Physical preferences and presentation',
-      icon: Icons.face_outlined,
-      color: AppColors.gold,
-      tests: kCoreValuesQuizTests,
-    ),
-    _QuizCategoryInfo(
-      title: 'Lifestyle',
-      description: 'Health, routine, and how you live day to day',
-      icon: Icons.fitness_center_outlined,
-      color: AppColors.emerald,
-      tests: kCoreValuesQuizTests,
-    ),
-    _QuizCategoryInfo(
-      title: 'Core Values',
-      description: 'Family, beliefs, language, and what matters most',
-      icon: Icons.auto_awesome,
-      color: AppColors.purple,
-      tests: kCoreValuesQuizTests,
-    ),
-  ];
-
-  Future<void> _openQuiz(int index, _QuizCategoryInfo info) async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => QuizScreen(tests: info.tests, title: info.title),
-      ),
-    );
-    // QuizScreen pops itself after its completion dialog closes — treat
-    // returning here as "completed" for now, since there's no real
-    // per-question scoring/answer validation yet.
-    _completionStore.markQuizComplete(index);
   }
 
   void _openCaseOpening() {
@@ -152,8 +81,6 @@ class _QuizHubScreenState extends State<QuizHubScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final categories = _categories;
-
     return Scaffold(
       backgroundColor: AppColors.bgDark,
       body: SafeArea(
@@ -196,31 +123,32 @@ class _QuizHubScreenState extends State<QuizHubScreen> {
               ),
             ),
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _TopMatchBox(
-                      onTap: _openTopMatch,
-                      canOpen: _limits.canOpenTopMatch,
-                      countdown: _limits.timeUntilNextTopMatch,
+              child: Stack(
+                children: [
+                  const Positioned.fill(
+                    child: IgnorePointer(child: FloorCardsBackground(seed: 4)),
+                  ),
+                  SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _TopMatchBox(
+                          onTap: _openTopMatch,
+                          canOpen: _limits.canOpenTopMatch,
+                          countdown: _limits.timeUntilNextTopMatch,
+                        ),
+                        const SizedBox(height: 14),
+                        _CaseBox(
+                          onTap: _openCaseOpening,
+                          canOpen: _limits.canOpenCase,
+                          remaining: _limits.casesRemainingToday,
+                          countdown: _limits.timeUntilNextCaseSlot,
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 14),
-                    _CaseBox(
-                      onTap: _openCaseOpening,
-                      canOpen: _limits.canOpenCase,
-                      remaining: _limits.casesRemainingToday,
-                      countdown: _limits.timeUntilNextCaseSlot,
-                    ),
-                    const SizedBox(height: 18),
-                    _QuizProgressBox(
-                      categories: categories,
-                      completed: _completionStore.completedQuizzes,
-                      onTapQuiz: _openQuiz,
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -360,192 +288,6 @@ class _CaseBox extends StatelessWidget {
       subtitle: canOpen
           ? '$remaining of ${MatchLimits.kMaxCasesPerDay} opens left today'
           : 'Next case in ${MatchLimits.formatCountdown(countdown ?? Duration.zero)}',
-    );
-  }
-}
-
-// ── Quiz progress box: symmetric 2-column grid ──────────────────────────
-
-class _QuizProgressBox extends StatelessWidget {
-  final List<_QuizCategoryInfo> categories;
-  final Set<int> completed;
-  final void Function(int index, _QuizCategoryInfo info) onTapQuiz;
-
-  const _QuizProgressBox({
-    required this.categories,
-    required this.completed,
-    required this.onTapQuiz,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(22),
-        color: AppColors.panelBg,
-        border: Border.all(color: AppColors.panelBorder),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.3),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'COMPLETED',
-                style: TextStyle(
-                  color: AppColors.purple,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 2,
-                ),
-              ),
-              Text(
-                '${completed.length} / ${categories.length}',
-                style: const TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: completed.length / categories.length,
-              minHeight: 6,
-              backgroundColor: Colors.white.withOpacity(0.07),
-              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.purple),
-            ),
-          ),
-          const SizedBox(height: 16),
-          // Symmetric 2-column grid — 5 quizzes means the last cell is
-          // left empty rather than letting the 5th tile span full width
-          // and break the grid's symmetry. A LayoutBuilder computes equal
-          // tile heights so every row lines up cleanly regardless of how
-          // long each title/description text runs.
-          LayoutBuilder(
-            builder: (context, constraints) {
-              const crossAxisCount = 2;
-              const spacing = 10.0;
-              final tileWidth =
-                  (constraints.maxWidth - spacing) / crossAxisCount;
-
-              return Wrap(
-                spacing: spacing,
-                runSpacing: spacing,
-                children: List.generate(categories.length, (index) {
-                  final info = categories[index];
-                  final isDone = completed.contains(index);
-                  return SizedBox(
-                    width: tileWidth,
-                    child: _QuizTile(
-                      info: info,
-                      isDone: isDone,
-                      onTap: () => onTapQuiz(index, info),
-                    ),
-                  );
-                }),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _QuizTile extends StatelessWidget {
-  final _QuizCategoryInfo info;
-  final bool isDone;
-  final VoidCallback onTap;
-
-  const _QuizTile({
-    required this.info,
-    required this.isDone,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 108,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceDark.withOpacity(0.4),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: info.color.withOpacity(isDone ? 0.5 : 0.25),
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: info.color.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(9),
-                    border: Border.all(color: info.color.withOpacity(0.3)),
-                  ),
-                  child: Icon(info.icon, color: info.color, size: 16),
-                ),
-                if (isDone)
-                  Icon(
-                    Icons.check_circle,
-                    color: AppColors.emerald.withOpacity(0.9),
-                    size: 16,
-                  )
-                else
-                  Icon(
-                    Icons.radio_button_unchecked,
-                    color: Colors.white.withOpacity(0.15),
-                    size: 16,
-                  ),
-              ],
-            ),
-            const Spacer(),
-            Text(
-              info.title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                height: 1.2,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              isDone ? 'Done' : 'Start',
-              style: TextStyle(
-                color: isDone
-                    ? AppColors.emerald.withOpacity(0.9)
-                    : AppColors.textSecondary,
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

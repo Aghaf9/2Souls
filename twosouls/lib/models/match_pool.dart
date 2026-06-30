@@ -27,6 +27,17 @@ class MatchCandidate {
   /// candidates at or above kTopMatchThreshold.
   final int compatibility;
 
+  /// Physical-attractiveness match score (0-100) — how closely this
+  /// candidate's self-rated/photo-rated looks align with the current
+  /// user's. Drives Short Term pack pool selection alongside
+  /// sharedAnswerCount (see MatchPool.buildShortTermPool).
+  final int looksMatchScore;
+
+  /// How many of the short-term quiz questions this candidate answered
+  /// identically to the current user (out of kShortTermQuizQuestionCount).
+  /// A higher count means a more "compatible for tonight" pool entry.
+  final int sharedShortTermAnswers;
+
   const MatchCandidate({
     required this.id,
     required this.name,
@@ -36,6 +47,8 @@ class MatchCandidate {
     required this.wear,
     this.photoUrl,
     required this.compatibility,
+    this.looksMatchScore = 50,
+    this.sharedShortTermAnswers = 0,
   });
 }
 
@@ -181,4 +194,148 @@ class MatchPool {
 
     return qualifying[rng.nextInt(qualifying.length)];
   }
+
+  // ── Short Term pack system ─────────────────────────────────────────────
+  // Unlike the general buildPool() above (used by Open Case / Top Match,
+  // which draws from a broad random population), the Short Term pack pool
+  // is built specifically from candidates who answered the SAME short-term
+  // quiz choices as the current user, then ranked by how closely their
+  // looks-match score aligns. This models "people who said the same things
+  // you did, who you're also likely to find physically compatible with" —
+  // a much narrower, more targeted pool than the general gambling draw.
+  //
+  // sharedAnswerCount and looksMatchScore are both placeholder-generated
+  // here (no real answer-comparison or photo-rating backend exists yet),
+  // but the pool is explicitly biased toward HIGH values on both axes, so
+  // testing the pack-opening UI sees realistic-looking "great match"
+  // candidates rather than uniformly random ones.
+  static List<MatchCandidate> buildShortTermPool({int count = 20, int? seed}) {
+    final rng = Random(seed);
+    final List<MatchCandidate> pool = [];
+
+    for (int i = 0; i < count; i++) {
+      final tier = _weightedTier(rng);
+      final wear = _wears[rng.nextInt(_wears.length)];
+      final name = _names[rng.nextInt(_names.length)];
+      final age = 20 + rng.nextInt(15);
+      final location = _locations[rng.nextInt(_locations.length)];
+      final baseCompat = 50 + (wear.index * 8) + rng.nextInt(15);
+      final compatibility = baseCompat.clamp(40, 100);
+      // Biased high — this pool is specifically "people who match you".
+      final looksMatchScore = (60 + rng.nextInt(40)).clamp(0, 100);
+      final sharedAnswers =
+          1 + rng.nextInt(3); // out of the 3 short-term quiz questions
+
+      pool.add(
+        MatchCandidate(
+          id: 'short_term_$i',
+          name: name,
+          age: age,
+          location: location,
+          tier: tier,
+          wear: wear,
+          compatibility: compatibility,
+          looksMatchScore: looksMatchScore,
+          sharedShortTermAnswers: sharedAnswers,
+        ),
+      );
+    }
+
+    // Sort so the highest shared-answers + looks-match candidates are
+    // most likely to surface in a 4-card pack pull.
+    pool.sort((a, b) {
+      final scoreA = a.sharedShortTermAnswers * 100 + a.looksMatchScore;
+      final scoreB = b.sharedShortTermAnswers * 100 + b.looksMatchScore;
+      return scoreB.compareTo(scoreA);
+    });
+
+    return pool;
+  }
+
+  /// Draws 4 distinct candidates for a Short Term pack opening, weighted
+  /// by rarity tier exactly like Open Case. If a guaranteed minimum tier
+  /// is active (see PassTier), every drawn card is re-rolled until it
+  /// meets or exceeds that tier.
+  static List<MatchCandidate> drawPack(
+    List<MatchCandidate> pool, {
+    int cardCount = 4,
+    PassTier? guaranteedTier,
+    int? seed,
+  }) {
+    final rng = Random(seed);
+    final drawn = <MatchCandidate>[];
+    final usedIds = <String>{};
+
+    int attempts = 0;
+    while (drawn.length < cardCount && attempts < cardCount * 50) {
+      attempts++;
+      final candidate = drawWeighted(
+        pool.where((c) => !usedIds.contains(c.id)).toList(),
+        seed: seed == null ? null : seed + attempts,
+      );
+      if (guaranteedTier != null &&
+          !guaranteedTier.meetsGuarantee(candidate.tier)) {
+        continue; // re-roll: doesn't meet the pass's minimum guarantee
+      }
+      if (usedIds.contains(candidate.id)) continue;
+      usedIds.add(candidate.id);
+      drawn.add(candidate);
+    }
+
+    // Fallback: if re-rolling couldn't fill all 4 slots (small pool edge
+    // case), top up with the highest-tier remaining candidates so the
+    // pack always has exactly cardCount cards.
+    if (drawn.length < cardCount) {
+      final remaining = pool.where((c) => !usedIds.contains(c.id)).toList()
+        ..sort((a, b) => b.tier.index.compareTo(a.tier.index));
+      for (final c in remaining) {
+        if (drawn.length >= cardCount) break;
+        drawn.add(c);
+        usedIds.add(c.id);
+      }
+    }
+
+    return drawn;
+  }
+}
+
+// ── Pass tiers ──────────────────────────────────────────────────────────
+// Future monetization hook: for a limited time, a purchased pass
+// guarantees every pack-opened card is at or above the pass's tier.
+// Not wired to any real purchase flow yet — see ShortTermPackScreen for
+// where this would be selected/applied once passes are purchasable.
+
+enum PassTier { silver, gold, platinum, purple }
+
+extension PassTierX on PassTier {
+  String get label {
+    switch (this) {
+      case PassTier.silver:
+        return 'Silver Pass';
+      case PassTier.gold:
+        return 'Gold Pass';
+      case PassTier.platinum:
+        return 'Platinum Pass';
+      case PassTier.purple:
+        return 'Purple Pass';
+    }
+  }
+
+  RarityTier get minimumTier {
+    switch (this) {
+      case PassTier.silver:
+        return RarityTier.silver;
+      case PassTier.gold:
+        return RarityTier.gold;
+      case PassTier.platinum:
+        return RarityTier.platinum;
+      case PassTier.purple:
+        return RarityTier.purple;
+    }
+  }
+
+  /// True if the given tier meets or exceeds this pass's guarantee.
+  /// Relies on RarityTier's declaration order (bronze < silver < gold <
+  /// platinum < purple) matching enum index order.
+  bool meetsGuarantee(RarityTier tier) => tier.index >= minimumTier.index;
 }

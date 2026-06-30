@@ -2,8 +2,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/bottom_nav.dart';
+import '../short_term_pack/short_term_hub_screen.dart';
 import 'quiz_hub_screen.dart';
-import 'quiz_screen.dart';
 
 // ---------------------------------------------------------------------------
 // RelationshipTypeScreen
@@ -55,10 +55,7 @@ class _RelationshipTypeScreenState extends State<RelationshipTypeScreen>
   void _goShortTerm(BuildContext context) {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) =>
-            QuizScreen(tests: kShortTermQuizTests, title: 'Short Term'),
-      ),
+      MaterialPageRoute(builder: (_) => const ShortTermHubScreen()),
     );
   }
 

@@ -3,9 +3,13 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../widgets/bottom_nav.dart';
+import '../widgets/floor_cards_background.dart';
 import '../theme/app_colors.dart';
 import '../models/card_rarity_model.dart';
 import '../models/profile_completion.dart';
+import '../models/hobby_taxonomy.dart';
+import '../models/career_taxonomy.dart';
+import '../models/quiz_answers.dart';
 import 'quiz/quiz_screen.dart';
 
 // ---------------------------------------------------------------------------
@@ -24,6 +28,15 @@ class UserProfile {
   final List<String> hobbies;
   final List<String> commonInterests;
   final String? photoUrl;
+
+  /// Structured selections from the quiz — drive real compatibility
+  /// scoring via HobbyCompatibility/CareerCompatibility (see
+  /// hobby_taxonomy.dart / career_taxonomy.dart). `hobbies` (the display
+  /// string list above) is kept in sync with this whenever it updates,
+  /// since several existing widgets already read the plain string list
+  /// for display and don't need to change.
+  final List<HobbySelection> hobbySelections;
+  final CareerSelection? careerSelection;
 
   // FIFA-style card attributes
   final int looks;
@@ -48,6 +61,8 @@ class UserProfile {
     required this.hobbies,
     required this.commonInterests,
     this.photoUrl,
+    this.hobbySelections = const [],
+    this.careerSelection,
     required this.looks,
     required this.intelligence,
     required this.ambition,
@@ -74,7 +89,24 @@ class UserProfile {
     String? institution,
     String? location,
     String? photoUrl,
+    List<HobbySelection>? hobbySelections,
+    CareerSelection? careerSelection,
   }) {
+    // Keep the plain display string list in sync whenever structured
+    // hobby selections update, so existing display widgets (which read
+    // `hobbies` as List<String>) keep working without modification.
+    final newHobbySelections = hobbySelections ?? this.hobbySelections;
+    final newHobbies = hobbySelections != null
+        ? newHobbySelections.map((h) => h.customLabel).toList()
+        : this.hobbies;
+
+    // Same idea for career: a structured CareerSelection updates the
+    // plain display string too.
+    final newCareerSelection = careerSelection ?? this.careerSelection;
+    final newCareer = careerSelection != null
+        ? careerSelection.customLabel
+        : (career ?? this.career);
+
     return UserProfile(
       name: name,
       age: age,
@@ -82,11 +114,13 @@ class UserProfile {
       location: location ?? this.location,
       countryFlagEmoji: countryFlagEmoji,
       bio: bio ?? this.bio,
-      career: career ?? this.career,
+      career: newCareer,
       institution: institution ?? this.institution,
-      hobbies: hobbies,
+      hobbies: newHobbies,
       commonInterests: commonInterests,
       photoUrl: photoUrl ?? this.photoUrl,
+      hobbySelections: newHobbySelections,
+      careerSelection: newCareerSelection,
       looks: looks,
       intelligence: intelligence,
       ambition: ambition,
@@ -229,6 +263,14 @@ class _ProfileScreenState extends State<ProfileScreen>
   // kIsWeb to pick the right widget.
   final List<XFile> _galleryPhotos = [];
 
+  /// Raw bytes of the current profile photo (PFP). Set automatically from
+  /// the first photo uploaded via the edit sheet's photo grid — uploading
+  /// a photo makes it the user's PFP immediately. Stored as bytes (not a
+  /// URL) since image_picker's XFile isn't a network URL and dart:io.File
+  /// isn't usable on Flutter web; Image.memory works identically on every
+  /// platform.
+  Uint8List? _pfpBytes;
+
   late final AnimationController _cardCtrl;
   late final Animation<double> _cardScale;
   late final Animation<Alignment> _cardAlign;
@@ -366,6 +408,7 @@ class _ProfileScreenState extends State<ProfileScreen>
           Navigator.of(sheetContext).pop();
           _openEditSheet();
         },
+        onUpdateProfile: (updated) => setState(() => _user = updated),
       ),
     );
   }
@@ -427,12 +470,32 @@ class _ProfileScreenState extends State<ProfileScreen>
       imageQuality: 85,
     );
     if (picked != null) {
-      setState(() => _galleryPhotos.add(picked));
+      final bytes = await picked.readAsBytes();
+      setState(() {
+        _galleryPhotos.add(picked);
+        // The most recently uploaded photo becomes the profile photo (PFP)
+        // shown on the card, as requested.
+        _pfpBytes = bytes;
+      });
     }
   }
 
   void _removePhoto(XFile photo) {
-    setState(() => _galleryPhotos.remove(photo));
+    setState(() {
+      final wasPfp = _galleryPhotos.indexOf(photo) == _galleryPhotos.length - 1;
+      _galleryPhotos.remove(photo);
+      // If the removed photo was the current PFP, fall back to the new
+      // most-recent remaining photo, or clear the PFP entirely if none
+      // are left.
+      if (wasPfp) {
+        _pfpBytes = null;
+        if (_galleryPhotos.isNotEmpty) {
+          _galleryPhotos.last.readAsBytes().then((bytes) {
+            if (mounted) setState(() => _pfpBytes = bytes);
+          });
+        }
+      }
+    });
   }
 
   void _onDragStart(DragStartDetails details) {
@@ -480,6 +543,9 @@ class _ProfileScreenState extends State<ProfileScreen>
             Expanded(
               child: Stack(
                 children: [
+                  const Positioned.fill(
+                    child: IgnorePointer(child: FloorCardsBackground(seed: 3)),
+                  ),
                   if (!_expanded)
                     Positioned.fill(
                       child: AnimatedBuilder(
@@ -516,6 +582,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                             child: Column(
                               children: [
                                 _AboutPanel(user: user),
+                                _PhotosPanel(photos: _galleryPhotos),
                                 _CareerPanel(user: user),
                                 _HobbiesPanel(user: user),
                                 _CompatibilityPanel(
@@ -573,6 +640,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                                     glowIntensity: _glowPulse.value - 1.0,
                                     shineProgress: _shineCtrl,
                                     isSelf: true,
+                                    photoBytes: _pfpBytes,
                                   ),
                                 ),
                               ),
@@ -814,6 +882,10 @@ class _PlayerCard extends StatelessWidget {
   /// any rarity tier colour, and skips the wear/scratch overlay entirely.
   final bool isSelf;
 
+  /// Raw bytes of the uploaded PFP (self card only). Takes priority over
+  /// user.photoUrl when present.
+  final Uint8List? photoBytes;
+
   const _PlayerCard({
     required this.user,
     required this.rarity,
@@ -821,6 +893,7 @@ class _PlayerCard extends StatelessWidget {
     required this.glowIntensity,
     required this.shineProgress,
     this.isSelf = false,
+    this.photoBytes,
   });
 
   @override
@@ -882,6 +955,7 @@ class _PlayerCard extends StatelessWidget {
                       children: [
                         _ProfilePhoto(
                           photoUrl: user.photoUrl,
+                          photoBytes: photoBytes,
                           initial: user.firstName[0],
                           rarityColor: rc,
                         ),
@@ -1315,10 +1389,12 @@ class _RarityBadge extends StatelessWidget {
 
 class _ProfilePhoto extends StatelessWidget {
   final String? photoUrl;
+  final Uint8List? photoBytes;
   final String initial;
   final Color rarityColor;
   const _ProfilePhoto({
     required this.photoUrl,
+    this.photoBytes,
     required this.initial,
     required this.rarityColor,
   });
@@ -1335,16 +1411,27 @@ class _ProfilePhoto extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(10),
-        child: photoUrl != null
-            ? Image.network(
-                photoUrl!,
+        child: photoBytes != null
+            ? Image.memory(
+                photoBytes!,
                 fit: BoxFit.cover,
                 width: double.infinity,
                 height: double.infinity,
                 errorBuilder: (_, __, ___) =>
                     _PhotoPlaceholder(initial: initial, color: rarityColor),
               )
-            : _PhotoPlaceholder(initial: initial, color: rarityColor),
+            : (photoUrl != null
+                  ? Image.network(
+                      photoUrl!,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                      errorBuilder: (_, __, ___) => _PhotoPlaceholder(
+                        initial: initial,
+                        color: rarityColor,
+                      ),
+                    )
+                  : _PhotoPlaceholder(initial: initial, color: rarityColor)),
       ),
     );
   }
@@ -1610,6 +1697,67 @@ class _RarityInfoPanel extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── Photos panel — shown when the card is expanded, lets the viewer see
+// all of this user's uploaded photos, not just the PFP on the card front.
+
+class _PhotosPanel extends StatelessWidget {
+  final List<XFile> photos;
+  const _PhotosPanel({required this.photos});
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      title: 'PHOTOS',
+      icon: Icons.photo_library_outlined,
+      child: photos.isEmpty
+          ? Text(
+              'No photos added yet.',
+              style: TextStyle(
+                color: AppColors.textSecondary.withOpacity(0.7),
+                fontSize: 12,
+              ),
+            )
+          : GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+                childAspectRatio: 0.8,
+              ),
+              itemCount: photos.length,
+              itemBuilder: (context, index) {
+                return ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: FutureBuilder<Uint8List>(
+                    future: photos[index].readAsBytes(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) {
+                        return Container(
+                          color: AppColors.surfaceDark,
+                          child: const Center(
+                            child: SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppColors.gold,
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+                      return Image.memory(snapshot.data!, fit: BoxFit.cover);
+                    },
+                  ),
+                );
+              },
+            ),
     );
   }
 }
@@ -2573,39 +2721,46 @@ class _CompletionQuizInfo {
   final String title;
   final IconData icon;
   final Color color;
+  final List<QuizTest> tests;
 
   const _CompletionQuizInfo({
     required this.title,
     required this.icon,
     required this.color,
+    required this.tests,
   });
 }
 
-const _completionQuizzes = [
+final _completionQuizzes = [
   _CompletionQuizInfo(
     title: 'Hobbies',
     icon: Icons.sports_esports_outlined,
     color: Color(0xFF3D74FF),
+    tests: kHobbiesQuizTests,
   ),
   _CompletionQuizInfo(
     title: 'Career & Education',
     icon: Icons.work_outline,
     color: AppColors.textSecondary,
+    tests: kCareerQuizTests,
   ),
   _CompletionQuizInfo(
     title: 'Looks',
     icon: Icons.face_outlined,
     color: AppColors.gold,
+    tests: kLooksQuizTests,
   ),
   _CompletionQuizInfo(
     title: 'Lifestyle',
     icon: Icons.fitness_center_outlined,
     color: AppColors.emerald,
+    tests: kLifestyleQuizTests,
   ),
   _CompletionQuizInfo(
     title: 'Core Values',
     icon: Icons.auto_awesome,
     color: AppColors.purple,
+    tests: kCoreValuesQuizTests,
   ),
 ];
 
@@ -2614,12 +2769,14 @@ class _CompletionChecklistSheet extends StatefulWidget {
   final bool hasPhotos;
   final ProfileCompletionStore completion;
   final VoidCallback onEditProfile;
+  final void Function(UserProfile updated) onUpdateProfile;
 
   const _CompletionChecklistSheet({
     required this.user,
     required this.hasPhotos,
     required this.completion,
     required this.onEditProfile,
+    required this.onUpdateProfile,
   });
 
   @override
@@ -2628,21 +2785,50 @@ class _CompletionChecklistSheet extends StatefulWidget {
 }
 
 class _CompletionChecklistSheetState extends State<_CompletionChecklistSheet> {
+  late UserProfile _user;
+
+  @override
+  void initState() {
+    super.initState();
+    _user = widget.user;
+  }
+
   Future<void> _startQuiz(int index, _CompletionQuizInfo info) async {
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            QuizScreen(tests: kCoreValuesQuizTests, title: info.title),
+        builder: (_) => QuizScreen(
+          tests: info.tests,
+          title: info.title,
+          onComplete: (answers) {
+            // Apply whatever the quiz actually collected back onto the
+            // profile. Hobbies and career are the two categories with
+            // real structured data right now (see hobby_taxonomy.dart /
+            // career_taxonomy.dart) — every other quiz's generic answers
+            // (image elimination picks, number picker values) are
+            // collected in answers.generalAnswers but not yet mapped onto
+            // specific UserProfile fields, since those quizzes don't have
+            // a corresponding structured field to update yet.
+            UserProfile updated = _user;
+            if (answers.hobbies.isNotEmpty) {
+              updated = updated.copyWith(hobbySelections: answers.hobbies);
+            }
+            if (answers.career != null) {
+              updated = updated.copyWith(careerSelection: answers.career);
+            }
+            setState(() => _user = updated);
+            widget.onUpdateProfile(updated);
+          },
+        ),
       ),
     );
     widget.completion.markQuizComplete(index);
     if (mounted) setState(() {});
   }
 
-  bool get _bioDone => widget.user.bio.trim().isNotEmpty;
-  bool get _careerDone => widget.user.career.trim().isNotEmpty;
-  bool get _locationDone => widget.user.location.trim().isNotEmpty;
+  bool get _bioDone => _user.bio.trim().isNotEmpty;
+  bool get _careerDone => _user.career.trim().isNotEmpty;
+  bool get _locationDone => _user.location.trim().isNotEmpty;
 
   @override
   Widget build(BuildContext context) {
