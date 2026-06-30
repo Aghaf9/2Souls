@@ -3,19 +3,36 @@ import 'package:flutter/material.dart';
 class BottomNav extends StatelessWidget {
   final int currentIndex;
 
-  const BottomNav({
-    super.key,
-    required this.currentIndex,
-  });
+  const BottomNav({super.key, required this.currentIndex});
 
   static const _glowColor = Color(0xFFB44CFF); // purple-pink glow
   static const _glowColorSoft = Color(0xFFE085FF);
 
   static const _items = [
-    (icon: Icons.home_outlined, selectedIcon: Icons.home, label: 'Home', route: '/home'),
-    (icon: Icons.explore_outlined, selectedIcon: Icons.explore, label: 'Discover', route: '/discover'),
-    (icon: Icons.chat_bubble_outline, selectedIcon: Icons.chat_bubble, label: 'Messages', route: '/messages'),
-    (icon: Icons.person_outline, selectedIcon: Icons.person, label: 'Profile', route: '/profile'),
+    (
+      icon: Icons.home_outlined,
+      selectedIcon: Icons.home,
+      label: 'Home',
+      route: '/home',
+    ),
+    (
+      icon: Icons.explore_outlined,
+      selectedIcon: Icons.explore,
+      label: 'Discover',
+      route: '/discover',
+    ),
+    (
+      icon: Icons.chat_bubble_outline,
+      selectedIcon: Icons.chat_bubble,
+      label: 'Messages',
+      route: '/messages',
+    ),
+    (
+      icon: Icons.person_outline,
+      selectedIcon: Icons.person,
+      label: 'Profile',
+      route: '/profile',
+    ),
   ];
 
   void _onTap(BuildContext context, int index) {
@@ -28,9 +45,7 @@ class BottomNav extends StatelessWidget {
     return Container(
       decoration: const BoxDecoration(
         color: Color(0xFF0B0F1F),
-        border: Border(
-          top: BorderSide(color: Color(0x33B44CFF), width: 0.6),
-        ),
+        border: Border(top: BorderSide(color: Color(0x33B44CFF), width: 0.6)),
       ),
       child: SafeArea(
         top: false,
@@ -131,7 +146,9 @@ class _NavButton extends StatelessWidget {
                       icon,
                       key: ValueKey('$icon-$isSelected'),
                       size: 26,
-                      color: isSelected ? Colors.white : Colors.white.withAlpha(160),
+                      color: isSelected
+                          ? Colors.white
+                          : Colors.white.withAlpha(160),
                       shadows: isSelected
                           ? [
                               Shadow(color: glowColor, blurRadius: 16),
