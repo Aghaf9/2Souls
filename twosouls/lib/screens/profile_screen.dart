@@ -10,7 +10,9 @@ import '../models/profile_completion.dart';
 import '../models/hobby_taxonomy.dart';
 import '../models/career_taxonomy.dart';
 import '../models/quiz_answers.dart';
+import '../models/user_match_stats.dart';
 import 'quiz/quiz_screen.dart';
+import 'messages_screen.dart' show CollectionStore;
 
 // ---------------------------------------------------------------------------
 // UserProfile model
@@ -304,6 +306,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     _user = _defaultUser;
     _rarity = CardRarityModel.compute(_user.compatScores);
     _completion.addListener(_onCompletionChanged);
+    CollectionStore.instance.addListener(_onStoreChanged);
 
     _cardCtrl = AnimationController(
       vsync: this,
@@ -373,11 +376,30 @@ class _ProfileScreenState extends State<ProfileScreen>
     _bgCtrl.dispose();
     _shineCtrl.dispose();
     _completion.removeListener(_onCompletionChanged);
+    CollectionStore.instance.removeListener(_onStoreChanged);
     super.dispose();
   }
 
   void _onCompletionChanged() {
     if (mounted) setState(() {});
+  }
+
+  void _onStoreChanged() {
+    if (mounted) setState(() {});
+  }
+
+  /// Live stats derived from CollectionStore — update automatically when
+  /// matches are claimed, expired, or moved into Chats.
+  UserMatchStats get _selfStats {
+    final store = CollectionStore.instance;
+    final chatCount = store.chats.whereType<Object>().length;
+    final totalClaimed = store.matches.length + chatCount;
+    return UserMatchStats(
+      totalMatches: totalClaimed,
+      inChats: chatCount,
+      expired:
+          0, // CollectionStore sweeps expiries silently; we don't track a running count yet
+    );
   }
 
   /// Fraction (0.0-1.0) of basic profile fields that are filled in:
@@ -581,6 +603,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                             physics: const BouncingScrollPhysics(),
                             child: Column(
                               children: [
+                                _SelfStatsPanel(stats: _selfStats),
                                 _AboutPanel(user: user),
                                 _PhotosPanel(photos: _galleryPhotos),
                                 _CareerPanel(user: user),
@@ -1758,6 +1781,141 @@ class _PhotosPanel extends StatelessWidget {
                 );
               },
             ),
+    );
+  }
+}
+
+// ── Self-stats panel — only shown on the user's own expanded card ──────────
+// Shows match activity stats derived live from CollectionStore: total
+// claimed, how many made it into Chats, match rate, and avg chat duration
+// (stub until a real messaging backend exists that tracks timestamps).
+
+class _SelfStatsPanel extends StatelessWidget {
+  final UserMatchStats stats;
+  const _SelfStatsPanel({required this.stats});
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      title: 'YOUR STATS',
+      icon: Icons.bar_chart,
+      accentColor: AppColors.selfAccent,
+      child: stats.totalMatches == 0
+          ? Text(
+              'No matches yet \u2014 open a case or pack to start.',
+              style: TextStyle(
+                color: AppColors.textSecondary.withOpacity(0.7),
+                fontSize: 12,
+              ),
+            )
+          : Column(
+              children: [
+                Row(
+                  children: [
+                    _StatTile(
+                      label: 'Total Claimed',
+                      value: '${stats.totalMatches}',
+                      icon: Icons.card_giftcard,
+                      color: AppColors.gold,
+                    ),
+                    const SizedBox(width: 10),
+                    _StatTile(
+                      label: 'In Chats',
+                      value: '${stats.acceptedCount}',
+                      icon: Icons.chat_bubble_outline,
+                      color: AppColors.selfAccent,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    _StatTile(
+                      label: 'Match Rate',
+                      value: '${stats.matchRatePct}%',
+                      icon: Icons.trending_up,
+                      color: AppColors.emerald,
+                    ),
+                    const SizedBox(width: 10),
+                    _StatTile(
+                      label: 'Avg Chat Length',
+                      value: stats.avgChatDuration,
+                      icon: Icons.timer_outlined,
+                      color: AppColors.purple,
+                      subtitle: 'tracking soon',
+                    ),
+                  ],
+                ),
+              ],
+            ),
+    );
+  }
+}
+
+class _StatTile extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+  final String? subtitle;
+
+  const _StatTile({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+    this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withOpacity(0.3)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, color: color, size: 14),
+                const SizedBox(width: 5),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: color.withOpacity(0.8),
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              value,
+              style: TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                height: 1,
+              ),
+            ),
+            if (subtitle != null)
+              Text(
+                subtitle!,
+                style: TextStyle(
+                  color: AppColors.textSecondary.withOpacity(0.5),
+                  fontSize: 9,
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
