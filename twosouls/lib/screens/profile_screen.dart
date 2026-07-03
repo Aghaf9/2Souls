@@ -13,6 +13,7 @@ import '../models/quiz_answers.dart';
 import '../models/user_match_stats.dart';
 import 'quiz/quiz_screen.dart';
 import 'messages_screen.dart' show CollectionStore;
+import 'face_rank_screen.dart';
 
 // ---------------------------------------------------------------------------
 // UserProfile model
@@ -40,6 +41,10 @@ class UserProfile {
   final List<HobbySelection> hobbySelections;
   final CareerSelection? careerSelection;
 
+  /// Overall looks score from the face ranking system (0–100), averaged
+  /// across all submitted photos. Null until the user completes face ranking.
+  final int? looksScore;
+
   // FIFA-style card attributes
   final int looks;
   final int intelligence;
@@ -65,6 +70,7 @@ class UserProfile {
     this.photoUrl,
     this.hobbySelections = const [],
     this.careerSelection,
+    this.looksScore,
     required this.looks,
     required this.intelligence,
     required this.ambition,
@@ -93,6 +99,7 @@ class UserProfile {
     String? photoUrl,
     List<HobbySelection>? hobbySelections,
     CareerSelection? careerSelection,
+    int? looksScore,
   }) {
     // Keep the plain display string list in sync whenever structured
     // hobby selections update, so existing display widgets (which read
@@ -123,6 +130,7 @@ class UserProfile {
       photoUrl: photoUrl ?? this.photoUrl,
       hobbySelections: newHobbySelections,
       careerSelection: newCareerSelection,
+      looksScore: looksScore ?? this.looksScore,
       looks: looks,
       intelligence: intelligence,
       ambition: ambition,
@@ -748,7 +756,6 @@ class _ProfileScreenState extends State<ProfileScreen>
           ],
         ),
       ),
-      bottomNavigationBar: const BottomNav(currentIndex: 3),
     );
   }
 }
@@ -2459,6 +2466,78 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
                       isPicking: _isPicking,
                       onAdd: _handlePickPhoto,
                       onRemove: widget.onRemovePhoto,
+                    ),
+                    const SizedBox(height: 10),
+                    // Face ranking — opens FaceRankScreen to score photos
+                    GestureDetector(
+                      onTap: () async {
+                        Navigator.of(context).pop(); // close edit sheet first
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => FaceRankScreen(
+                              onScored: (score) {
+                                // Score is applied via the parent's _user state
+                                // after the sheet closes — re-open edit sheet
+                                // so user can still make other changes.
+                              },
+                            ),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.gold.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: AppColors.gold.withOpacity(0.4),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.star_outline,
+                              color: AppColors.gold,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 10),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Rate My Photos',
+                                  style: TextStyle(
+                                    color: AppColors.gold,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                Text(
+                                  widget.user.looksScore != null
+                                      ? 'Current score: ${(widget.user.looksScore! / 10).toStringAsFixed(1)} / 10'
+                                      : 'Get your attractiveness score',
+                                  style: TextStyle(
+                                    color: AppColors.textSecondary.withOpacity(
+                                      0.7,
+                                    ),
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const Spacer(),
+                            Icon(
+                              Icons.chevron_right,
+                              color: AppColors.gold.withOpacity(0.6),
+                              size: 18,
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 22),
                     _SheetSectionLabel(label: 'ABOUT ME'),

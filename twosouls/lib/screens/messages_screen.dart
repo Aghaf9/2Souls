@@ -481,7 +481,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: const BottomNav(currentIndex: 2),
     );
   }
 }
@@ -498,7 +497,7 @@ class _Header extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: const BoxDecoration(
         color: AppColors.bgDark,
-        border: Border(bottom: BorderSide(color: Color(0x22B44CFF), width: 1)),
+        border: Border(bottom: BorderSide(color: Color(0x221E2D5A), width: 1)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -517,7 +516,7 @@ class _Header extends StatelessWidget {
             decoration: BoxDecoration(
               color: AppColors.panelBg,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0x33B44CFF)),
+              border: Border.all(color: const Color(0x331E2D5A)),
             ),
             child: Text(
               '$matchCount matched',
@@ -615,7 +614,7 @@ class _ChatsSection extends StatelessWidget {
               width: 4,
               height: 16,
               decoration: BoxDecoration(
-                color: AppColors.gold,
+                color: AppColors.accent,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -1451,7 +1450,7 @@ class _TradeUpSection extends StatelessWidget {
               width: 4,
               height: 16,
               decoration: BoxDecoration(
-                color: AppColors.gold,
+                color: AppColors.accent,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -1721,7 +1720,7 @@ class _TradeUpSelectionScreenState extends State<_TradeUpSelectionScreen> {
             Container(
               padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
               decoration: const BoxDecoration(
-                border: Border(bottom: BorderSide(color: Color(0x22B44CFF))),
+                border: Border(bottom: BorderSide(color: Color(0x221E2D5A))),
               ),
               child: Row(
                 children: [
@@ -1732,7 +1731,7 @@ class _TradeUpSelectionScreenState extends State<_TradeUpSelectionScreen> {
                       decoration: BoxDecoration(
                         color: AppColors.panelBg,
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0x33B44CFF)),
+                        border: Border.all(color: const Color(0x331E2D5A)),
                       ),
                       child: const Icon(
                         Icons.arrow_back,

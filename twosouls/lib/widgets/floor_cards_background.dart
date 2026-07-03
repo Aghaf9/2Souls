@@ -36,7 +36,13 @@ class FloorCardsBackground extends StatelessWidget {
         final rng = Random(seed);
         final w = constraints.maxWidth;
         final h = constraints.maxHeight;
-        final colors = [AppColors.bronze, AppColors.silver, AppColors.gold, AppColors.purple, AppColors.emerald];
+        final colors = [
+          AppColors.accent.withOpacity(0.8),
+          AppColors.starWhite.withOpacity(0.6),
+          AppColors.tealSheen.withOpacity(0.7),
+          AppColors.accentSoft.withOpacity(0.8),
+          AppColors.moonlight.withOpacity(0.5),
+        ];
 
         // Guard against zero/negative available space (e.g. during initial
         // layout passes before constraints are finalized) which would
@@ -47,7 +53,8 @@ class FloorCardsBackground extends StatelessWidget {
           children: List.generate(cardCount, (i) {
             final left = rng.nextDouble() * (w - 70);
             final top = rng.nextDouble() * (h - 100);
-            final angle = (rng.nextDouble() - 0.5) * 1.4; // up to ~40 degrees either way
+            final angle =
+                (rng.nextDouble() - 0.5) * 1.4; // up to ~40 degrees either way
             final color = colors[rng.nextInt(colors.length)];
             final scale = 0.7 + rng.nextDouble() * 0.5;
 

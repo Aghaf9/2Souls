@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "220195544992",
+    "project_id": "souls-380b0",
+    "storage_bucket": "souls-380b0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:220195544992:android:ed857d576829f15c4dcec5",
+        "android_client_info": {
+          "package_name": "com.example.twosouls"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAvYlscVHsGK1KCEu-06x05ULk2of-OTH0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

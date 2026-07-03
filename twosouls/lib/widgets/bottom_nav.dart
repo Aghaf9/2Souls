@@ -1,70 +1,77 @@
 import 'package:flutter/material.dart';
+import '../theme/app_colors.dart';
+
+// ---------------------------------------------------------------------------
+// BottomNav
+//
+// Purple-glow nav bar — the active tab gets a purple glow halo and the
+// icon pulses slightly. Inactive tabs are muted. The shell (MainShell)
+// owns the IndexedStack and passes currentIndex + onTap through here.
+// ---------------------------------------------------------------------------
 
 class BottomNav extends StatelessWidget {
   final int currentIndex;
+  final void Function(int index)? onTap;
 
-  const BottomNav({super.key, required this.currentIndex});
-
-  static const _glowColor = Color(0xFFB44CFF); // purple-pink glow
-  static const _glowColorSoft = Color(0xFFE085FF);
+  const BottomNav({super.key, required this.currentIndex, this.onTap});
 
   static const _items = [
-    (
+    _NavItemData(
       icon: Icons.home_outlined,
-      selectedIcon: Icons.home,
+      activeIcon: Icons.home,
       label: 'Home',
-      route: '/home',
     ),
-    (
+    _NavItemData(
       icon: Icons.explore_outlined,
-      selectedIcon: Icons.explore,
+      activeIcon: Icons.explore,
       label: 'Discover',
-      route: '/discover',
     ),
-    (
-      icon: Icons.chat_bubble_outline,
-      selectedIcon: Icons.chat_bubble,
-      label: 'Messages',
-      route: '/messages',
+    _NavItemData(
+      icon: Icons.style_outlined,
+      activeIcon: Icons.style,
+      label: 'Cards',
     ),
-    (
+    _NavItemData(
       icon: Icons.person_outline,
-      selectedIcon: Icons.person,
+      activeIcon: Icons.person,
       label: 'Profile',
-      route: '/profile',
     ),
   ];
-
-  void _onTap(BuildContext context, int index) {
-    if (index == currentIndex) return;
-    Navigator.pushReplacementNamed(context, _items[index].route);
-  }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF0B0F1F),
-        border: Border(top: BorderSide(color: Color(0x33B44CFF), width: 0.6)),
+      decoration: BoxDecoration(
+        // Dark navy base matching the logo
+        color: AppColors.surface,
+        border: const Border(
+          top: BorderSide(color: AppColors.panelBorder, width: 1),
+        ),
+        boxShadow: [
+          // Purple glow bleeding upward from the nav bar
+          BoxShadow(
+            color: AppColors.purple.withOpacity(0.18),
+            blurRadius: 20,
+            offset: const Offset(0, -4),
+            spreadRadius: 2,
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.4),
+            blurRadius: 8,
+            offset: const Offset(0, -2),
+          ),
+        ],
       ),
       child: SafeArea(
         top: false,
         child: SizedBox(
-          height: 64,
+          height: 62,
           child: Row(
-            children: List.generate(_items.length, (index) {
-              final isSelected = index == currentIndex;
-              final item = _items[index];
-
-              return Expanded(
-                child: _NavButton(
-                  icon: isSelected ? item.selectedIcon : item.icon,
-                  label: item.label,
-                  isSelected: isSelected,
-                  glowColor: _glowColor,
-                  glowColorSoft: _glowColorSoft,
-                  onTap: () => _onTap(context, index),
-                ),
+            children: List.generate(_items.length, (i) {
+              return _NavItem(
+                data: _items[i],
+                isActive: i == currentIndex,
+                onTap: () => onTap?.call(i),
               );
             }),
           ),
@@ -74,104 +81,71 @@ class BottomNav extends StatelessWidget {
   }
 }
 
-class _NavButton extends StatelessWidget {
+class _NavItemData {
   final IconData icon;
+  final IconData activeIcon;
   final String label;
-  final bool isSelected;
-  final Color glowColor;
-  final Color glowColorSoft;
+  const _NavItemData({
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+  });
+}
+
+class _NavItem extends StatelessWidget {
+  final _NavItemData data;
+  final bool isActive;
   final VoidCallback onTap;
 
-  const _NavButton({
-    required this.icon,
-    required this.label,
-    required this.isSelected,
-    required this.glowColor,
-    required this.glowColorSoft,
+  const _NavItem({
+    required this.data,
+    required this.isActive,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
+    return Expanded(
+      child: GestureDetector(
         onTap: onTap,
-        splashColor: glowColor.withAlpha(40),
-        highlightColor: Colors.transparent,
+        behavior: HitTestBehavior.opaque,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            SizedBox(
-              width: 52,
-              height: 34,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  // outer soft halo - always present, just fades in/out
-                  AnimatedOpacity(
-                    duration: const Duration(milliseconds: 220),
-                    opacity: isSelected ? 1.0 : 0.0,
-                    child: Container(
-                      width: 52,
-                      height: 34,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(20),
-                        gradient: RadialGradient(
-                          colors: [
-                            glowColor.withAlpha(110),
-                            glowColor.withAlpha(0),
-                          ],
+            // Active icon gets a purple glow halo
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOutCubic,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+              decoration: isActive
+                  ? BoxDecoration(
+                      borderRadius: BorderRadius.circular(22),
+                      color: AppColors.purple.withOpacity(0.18),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.purple.withOpacity(0.35),
+                          blurRadius: 14,
+                          spreadRadius: 1,
                         ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: glowColor.withAlpha(160),
-                            blurRadius: 22,
-                            spreadRadius: 1,
-                          ),
-                          BoxShadow(
-                            color: glowColorSoft.withAlpha(90),
-                            blurRadius: 10,
-                            spreadRadius: -2,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 220),
-                    transitionBuilder: (child, animation) =>
-                        FadeTransition(opacity: animation, child: child),
-                    child: Icon(
-                      icon,
-                      key: ValueKey('$icon-$isSelected'),
-                      size: 26,
-                      color: isSelected
-                          ? Colors.white
-                          : Colors.white.withAlpha(160),
-                      shadows: isSelected
-                          ? [
-                              Shadow(color: glowColor, blurRadius: 16),
-                              Shadow(color: glowColorSoft, blurRadius: 8),
-                            ]
-                          : [],
-                    ),
-                  ),
-                ],
+                      ],
+                    )
+                  : const BoxDecoration(),
+              child: Icon(
+                isActive ? data.activeIcon : data.icon,
+                color: isActive ? AppColors.purple : AppColors.textMuted,
+                size: 22,
               ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 3),
             AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 220),
+              duration: const Duration(milliseconds: 200),
               style: TextStyle(
-                fontSize: 11,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                color: isSelected ? glowColorSoft : Colors.white.withAlpha(140),
-                shadows: isSelected
-                    ? [Shadow(color: glowColor.withAlpha(180), blurRadius: 10)]
-                    : [],
+                color: isActive ? AppColors.purple : AppColors.textMuted,
+                fontSize: 10,
+                fontWeight: isActive ? FontWeight.w700 : FontWeight.w400,
+                letterSpacing: isActive ? 0.3 : 0,
               ),
-              child: Text(label),
+              child: Text(data.label),
             ),
           ],
         ),

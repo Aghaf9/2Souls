@@ -1,20 +1,15 @@
 import 'package:flutter/material.dart';
 import 'theme/app_colors.dart';
-import 'screens/login_screen.dart';
-import 'screens/signup_screen.dart';
-import 'screens/signup_dob_screen.dart';
-import 'package:flutter/material.dart';
-
-import 'screens/splash_screen.dart';
-import 'screens/login_screen.dart';
-import 'screens/signup_screen.dart';
-import 'screens/signup_dob_screen.dart';
-import 'screens/home_screen.dart';
-import 'screens/discover_screen.dart';
-import 'screens/messages_screen.dart';
-import 'screens/profile_screen.dart';
-import 'screens/quiz/relationship_type_screen.dart';
 import 'ads/ad_manager.dart';
+import 'screens/auth/login_screen.dart';
+import 'screens/main_shell.dart';
+
+// Firebase is commented out until flutterfire configure is completed.
+// Uncomment once firebase_options.dart has real credentials:
+//
+// import 'package:firebase_core/firebase_core.dart';
+// import 'firebase_options.dart';
+// import 'screens/auth/auth_gate.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,30 +23,38 @@ class TwoSoulsApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: '2souls',
+      title: '2Souls',
       debugShowCheckedModeBanner: false,
-      initialRoute: '/splash',
-      routes: {
-        '/splash': (context) => const SplashScreen(),
-        '/login': (context) => const LoginScreen(),
-        '/signup': (context) => const SignupScreen(),
-        '/signup-dob': (context) => const SignupDobScreen(),
-
-        // Bottom-nav destinations — each MUST point to its OWN screen class,
-        // not a copy-pasted duplicate. If two routes ever render identically,
-        // check that the screen file wasn't duplicated from another one.
-        '/home': (context) => const HomeScreen(),
-        '/discover': (context) => const DiscoverScreen(),
-        '/messages': (context) => const MessagesScreen(),
-        '/profile': (context) => const ProfileScreen(),
-
-        // Quiz flow — not yet linked from any button. Navigate here
-        // manually via Navigator.pushNamed(context, '/quiz') once a
-        // proper entry point (e.g. a "Take the quiz" button) is added.
-        // This lands on the Short Term / Long Term selection screen first,
-        // which then routes into the actual quizzes.
-        '/quiz': (context) => const RelationshipTypeScreen(),
-      },
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: AppColors.bgDark,
+        colorScheme: ColorScheme.dark(
+          primary: AppColors.accent,
+          secondary: AppColors.accentSoft,
+          surface: AppColors.surface,
+        ),
+      ),
+      // Start at login screen. LoginScreen has a "Skip for now" link
+      // to go to the shell for testing, or sign in to go to the shell.
+      home: const _AppRouter(),
     );
+  }
+}
+
+// Simple router — shows login until the user taps "Skip" or signs in
+class _AppRouter extends StatefulWidget {
+  const _AppRouter();
+
+  @override
+  State<_AppRouter> createState() => _AppRouterState();
+}
+
+class _AppRouterState extends State<_AppRouter> {
+  bool _authed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (_authed) return const MainShell();
+    return LoginScreen(onSuccess: () => setState(() => _authed = true));
   }
 }

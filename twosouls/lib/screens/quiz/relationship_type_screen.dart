@@ -169,7 +169,7 @@ class _RelationshipTypeScreenState extends State<RelationshipTypeScreen>
                     subLabel: inLongTerm
                         ? 'In pool \u2014 tap to enter'
                         : 'Find something real',
-                    baseColors: const [Color(0xFF1A2A5C), Color(0xFF0B1430)],
+                    baseColors: const [Color(0xFF0D1033), Color(0xFF112355)],
                     accentColor: AppColors.gold,
                     sheenT: _sheenCtrl.value,
                     icon: Icons.favorite_outline,
@@ -194,7 +194,7 @@ class _RelationshipTypeScreenState extends State<RelationshipTypeScreen>
                     subLabel: inShortTerm
                         ? 'In pool \u2014 tap to enter'
                         : 'Tonight, no strings',
-                    baseColors: const [Color(0xFF5C1A3A), Color(0xFF300B1E)],
+                    baseColors: const [Color(0xFF2D0A4E), Color(0xFF1A0630)],
                     accentColor: AppColors.purple,
                     sheenT: (_sheenCtrl.value + 0.5) % 1.0,
                     icon: Icons.bolt,
@@ -271,9 +271,7 @@ class _RelationshipTypeScreenState extends State<RelationshipTypeScreen>
           ),
         ],
       ),
-      bottomNavigationBar: widget.showCloseButton
-          ? null
-          : const BottomNav(currentIndex: 0),
+      bottomNavigationBar: null,
     );
   }
 }

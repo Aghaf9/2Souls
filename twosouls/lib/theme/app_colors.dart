@@ -1,40 +1,98 @@
 import 'package:flutter/material.dart';
 
+// ---------------------------------------------------------------------------
+// AppColors — 2Souls design system
+//
+// Palette inspired by the logo: deep navy night sky, soft moonlight whites,
+// flowing water blues and teals. Every colour has a purpose:
+//
+//   bgDark / bgDeep  — page backgrounds, darkest layer
+//   surface          — raised panels, cards, sheets (not match cards)
+//   panelBg          — inner sections, input fields
+//   panelBorder      — subtle borders between elements
+//
+//   accent           — primary interactive colour (moonlit blue-white)
+//   accentSoft       — softer accent for secondary actions
+//   accentGlow       — for glows/shadows on focused elements
+//
+//   flow1-4          — the "flowing water" gradient stops used on headers,
+//                      dividers, shimmer effects: deep navy → cobalt → teal
+//
+//   textPrimary      — main readable text (near-white)
+//   textSecondary    — supporting/label text (muted blue-white)
+//   textMuted        — placeholder text
+//
+//   gold             — kept for the rarity system (match cards only)
+//   rarity*          — tier colours for match cards only, unchanged
+// ---------------------------------------------------------------------------
+
 class AppColors {
-  // ── existing ────────────────────────────────────────────────────────────
-  static const bgDark = Color(0xFF0B0F1F);
-  static const surfaceDark = Color(0xFF11224D);
-  static const primaryBlue = Color(0xFF2E6CD6);
-  static const accentBlue = Color(0xFF9EC5FF);
-  static const white = Color(0xFFFFFFFF);
+  AppColors._();
 
-  // ── profile / card ──────────────────────────────────────────────────────
-  static const cardBg = Color(0xFF101C3F);
-  static const cardBgDeep = Color(0xFF0A1330);
-  static const panelBg = Color(0xFF101830);
-  static const panelBorder = Color(0x33B44CFF);
+  // ── Backgrounds ────────────────────────────────────────────────────────────
+  static const Color bgDark = Color(0xFF080D1F); // deepest navy — page bg
+  static const Color bgDeep = Color(0xFF0D1033); // logo bg colour
+  static const Color surface = Color(0xFF111A3A); // raised panels/sheets
+  static const Color panelBg = Color(0xFF162040); // input fields, inner panels
+  static const Color panelBorder = Color(0xFF1E2D5A); // subtle borders
 
-  static const gold = Color(0xFFD4AF6A);
-  static const goldDark = Color(0xFF8A6A2F);
-  static const goldLight = Color(0xFFF0CC6E);
+  // ── Accent — moonlit blue/white ────────────────────────────────────────────
+  static const Color accent = Color(0xFF6B9FFF); // primary CTA, links
+  static const Color accentSoft = Color(0xFF4A7AE8); // secondary actions
+  static const Color accentGlow = Color(0x334A7AE8); // shadows/glows
 
-  static const purple = Color(0xFFB44CFF);
-  static const purpleSoft = Color(0xFFE085FF);
+  // ── Flow gradient colours (water/constellation feel) ──────────────────────
+  static const Color flow1 = Color(0xFF0D1033); // deep navy
+  static const Color flow2 = Color(0xFF112355); // cobalt
+  static const Color flow3 = Color(0xFF1A3A7A); // mid blue
+  static const Color flow4 = Color(0xFF1E5C8A); // ocean teal-blue
 
-  static const textPrimary = Color(0xFFFFFFFF);
-  static const textSecondary = Color(0xFF9EC5FF);
-  static const textMuted = Color(0xFF4A6080);
+  // ── Highlights ─────────────────────────────────────────────────────────────
+  static const Color moonlight = Color(0xFFE8EFFF); // brightest highlight
+  static const Color starWhite = Color(0xFFCDD9FF); // star/shimmer colour
+  static const Color tealSheen = Color(0xFF2ABFBF); // self-card teal accent
 
-  // ── rarity ──────────────────────────────────────────────────────────────
-  static const bronze = Color(0xFFCD7F32);
-  static const silver = Color(0xFFB0BEC5);
-  static const sapphire = Color(0xFF1E90FF);
-  static const emerald = Color(0xFF50C878);
-  static const platinum = Color(0xFFE0E6EC);
-  static const rarityPurple = Color(0xFF9B30FF);
+  // ── Text ───────────────────────────────────────────────────────────────────
+  static const Color textPrimary = Color(0xFFE8EFFF); // main text
+  static const Color textSecondary = Color(0xFF8BA4D4); // labels, subtitles
+  static const Color textMuted = Color(0xFF4A6090); // placeholders
 
-  // ── self / identity (your own card — never a rarity colour) ───────────
-  static const selfAccent = Color(
-    0xFF2DD4BF,
-  ); // teal, distinct from every rarity tier
+  // ── Status ─────────────────────────────────────────────────────────────────
+  static const Color success = Color(0xFF2ABFBF); // accept / green actions
+  static const Color danger = Color(0xFFE05B5B); // deny / error
+
+  // ── Rarity tier colours — used ONLY on match cards ────────────────────────
+  // These are deliberately kept vibrant so cards "pop" against the navy bg.
+  static const Color gold = Color(0xFFD4AF6A);
+  static const Color emerald = Color(0xFF50C878);
+  static const Color bronze = Color(0xFFCD7F32);
+  static const Color silver = Color(0xFFA8A9AD);
+  static const Color platinum = Color(0xFFE5E4E2);
+  static const Color rarityPurple = Color(0xFFB44CFF); // Royal tier
+  static const Color purple = Color(0xFFB44CFF); // alias
+
+  // ── Self card accent (teal) ────────────────────────────────────────────────
+  static const Color selfAccent = Color(0xFF2ABFBF);
+
+  // ── Legacy aliases ─────────────────────────────────────────────────────────
+  static const Color purpleSoft = Color(0xFF8A2FCC); // softer royal/purple
+  static const Color goldLight = Color(0xFFE8C97A); // lighter gold
+  static const Color cardBg = surface;
+  static const Color surfaceDark = panelBg;
 }
+
+// ── Flow gradient — the signature multi-stop gradient used on headers,
+//    diagonal splits, and any "sky/water" background element.
+const kFlowGradient = LinearGradient(
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+  colors: [AppColors.flow1, AppColors.flow2, AppColors.flow3, AppColors.flow4],
+  stops: [0.0, 0.35, 0.7, 1.0],
+);
+
+const kFlowGradientVertical = LinearGradient(
+  begin: Alignment.topCenter,
+  end: Alignment.bottomCenter,
+  colors: [AppColors.flow1, AppColors.flow2, AppColors.flow3],
+  stops: [0.0, 0.5, 1.0],
+);

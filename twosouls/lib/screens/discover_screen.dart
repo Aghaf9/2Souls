@@ -147,10 +147,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [const AdBannerWidget(), const BottomNav(currentIndex: 1)],
-      ),
+      bottomNavigationBar: const AdBannerWidget(),
     );
   }
 }
@@ -172,7 +169,7 @@ class _Header extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: const BoxDecoration(
         color: AppColors.bgDark,
-        border: Border(bottom: BorderSide(color: Color(0x22B44CFF), width: 1)),
+        border: Border(bottom: BorderSide(color: Color(0x221E2D5A), width: 1)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -200,7 +197,7 @@ class _Header extends StatelessWidget {
                 border: Border.all(
                   color: isSubscriber
                       ? AppColors.gold.withOpacity(0.6)
-                      : const Color(0x33B44CFF),
+                      : const Color(0x331E2D5A),
                 ),
               ),
               child: Text(
