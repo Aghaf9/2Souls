@@ -456,6 +456,78 @@ final List<QuizTest> kLooksQuizTests = [
       ),
     ],
   ),
+  ImageEliminationTest(
+    question: 'My sexual orientation is\u2026',
+    subtitle: 'Used to match you with the right people \u2014 private to you.',
+    options: const [
+      QuizImageOption(
+        id: 'straight',
+        label: 'Straight',
+        icon: Icons.favorite,
+        tint: Color(0xFF3949AB),
+      ),
+      QuizImageOption(
+        id: 'gay_lesbian',
+        label: 'Gay / Lesbian',
+        icon: Icons.favorite,
+        tint: Color(0xFFD81B60),
+      ),
+      QuizImageOption(
+        id: 'bisexual',
+        label: 'Bisexual',
+        icon: Icons.favorite,
+        tint: Color(0xFF8E24AA),
+      ),
+      QuizImageOption(
+        id: 'pansexual',
+        label: 'Pansexual',
+        icon: Icons.favorite,
+        tint: Color(0xFFEF6C00),
+      ),
+      QuizImageOption(
+        id: 'asexual',
+        label: 'Asexual',
+        icon: Icons.favorite_border,
+        tint: Color(0xFF546E7A),
+      ),
+      QuizImageOption(
+        id: 'prefer_not_say',
+        label: 'Prefer not to say',
+        icon: Icons.lock_outline,
+        tint: Color(0xFF546E7A),
+      ),
+    ],
+  ),
+  ImageEliminationTest(
+    question: 'I\u2019m open to dating\u2026',
+    subtitle: 'Tap the one that best describes your preference.',
+    options: const [
+      QuizImageOption(
+        id: 'dating_women',
+        label: 'Women',
+        icon: Icons.person,
+        tint: Color(0xFFD81B60),
+      ),
+      QuizImageOption(
+        id: 'dating_men',
+        label: 'Men',
+        icon: Icons.person,
+        tint: Color(0xFF3949AB),
+      ),
+      QuizImageOption(
+        id: 'dating_everyone',
+        label: 'Everyone',
+        icon: Icons.public,
+        tint: Color(0xFF8E24AA),
+      ),
+      QuizImageOption(
+        id: 'dating_nonbinary',
+        label: 'Non-binary people',
+        icon: Icons.person_outline,
+        tint: Color(0xFF43A047),
+      ),
+    ],
+  ),
 ];
 
 final List<QuizTest> kLifestyleQuizTests = [

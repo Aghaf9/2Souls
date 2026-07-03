@@ -664,6 +664,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                                     shineProgress: _shineCtrl,
                                     isSelf: true,
                                     photoBytes: _pfpBytes,
+                                    matchStats: _selfStats,
                                   ),
                                 ),
                               ),
@@ -909,6 +910,10 @@ class _PlayerCard extends StatelessWidget {
   /// user.photoUrl when present.
   final Uint8List? photoBytes;
 
+  /// Live match stats (self card only). When non-null, the right column of
+  /// the stat grid shows CLM/CHT/RTG instead of HUM/KND/OVR.
+  final UserMatchStats? matchStats;
+
   const _PlayerCard({
     required this.user,
     required this.rarity,
@@ -917,6 +922,7 @@ class _PlayerCard extends StatelessWidget {
     required this.shineProgress,
     this.isSelf = false,
     this.photoBytes,
+    this.matchStats,
   });
 
   @override
@@ -1056,7 +1062,12 @@ class _PlayerCard extends StatelessWidget {
                   _GoldDivider(color: rc),
                   const SizedBox(height: 7),
 
-                  _FifaStatGrid(user: user, rc: rc, progress: statProgress),
+                  _FifaStatGrid(
+                    user: user,
+                    rc: rc,
+                    progress: statProgress,
+                    matchStats: isSelf ? matchStats : null,
+                  ),
                 ],
               ),
             ),
@@ -1192,22 +1203,34 @@ class _FifaStatGrid extends StatelessWidget {
   final Color rc;
   final AnimationController progress;
 
+  /// When provided (self card only), the right column shows match activity
+  /// stats instead of personal attribute scores.
+  final UserMatchStats? matchStats;
+
   const _FifaStatGrid({
     required this.user,
     required this.rc,
     required this.progress,
+    this.matchStats,
   });
 
   @override
   Widget build(BuildContext context) {
-    final stats = [
+    final leftStats = [
       ('LKS', user.looks),
       ('INT', user.intelligence),
       ('AMB', user.ambition),
-      ('HUM', user.humor),
-      ('KND', user.kindness),
-      ('OVR', user.overall),
     ];
+
+    final rightStats = matchStats != null
+        ? [
+            ('CLM', matchStats!.totalMatches.clamp(0, 99)),
+            ('CHT', matchStats!.acceptedCount.clamp(0, 99)),
+            ('RTG', matchStats!.matchRatePct.clamp(0, 99)),
+          ]
+        : [('HUM', user.humor), ('KND', user.kindness), ('OVR', user.overall)];
+
+    final rightHighlight = [false, false, matchStats == null];
 
     return AnimatedBuilder(
       animation: progress,
@@ -1218,22 +1241,22 @@ class _FifaStatGrid extends StatelessWidget {
               child: Column(
                 children: [
                   _FifaStat(
-                    label: stats[0].$1,
-                    value: stats[0].$2,
+                    label: leftStats[0].$1,
+                    value: leftStats[0].$2,
                     rc: rc,
                     t: progress.value,
                   ),
                   const SizedBox(height: 4),
                   _FifaStat(
-                    label: stats[1].$1,
-                    value: stats[1].$2,
+                    label: leftStats[1].$1,
+                    value: leftStats[1].$2,
                     rc: rc,
                     t: progress.value,
                   ),
                   const SizedBox(height: 4),
                   _FifaStat(
-                    label: stats[2].$1,
-                    value: stats[2].$2,
+                    label: leftStats[2].$1,
+                    value: leftStats[2].$2,
                     rc: rc,
                     t: progress.value,
                   ),
@@ -1260,25 +1283,25 @@ class _FifaStatGrid extends StatelessWidget {
               child: Column(
                 children: [
                   _FifaStat(
-                    label: stats[3].$1,
-                    value: stats[3].$2,
+                    label: rightStats[0].$1,
+                    value: rightStats[0].$2,
                     rc: rc,
                     t: progress.value,
                   ),
                   const SizedBox(height: 4),
                   _FifaStat(
-                    label: stats[4].$1,
-                    value: stats[4].$2,
+                    label: rightStats[1].$1,
+                    value: rightStats[1].$2,
                     rc: rc,
                     t: progress.value,
                   ),
                   const SizedBox(height: 4),
                   _FifaStat(
-                    label: stats[5].$1,
-                    value: stats[5].$2,
+                    label: rightStats[2].$1,
+                    value: rightStats[2].$2,
                     rc: rc,
                     t: progress.value,
-                    highlight: true,
+                    highlight: rightHighlight[2],
                   ),
                 ],
               ),

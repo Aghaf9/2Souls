@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'card_rarity_model.dart';
+import 'match_profile.dart';
 
 // ---------------------------------------------------------------------------
 // MatchCandidate / MatchPool
@@ -21,22 +22,25 @@ class MatchCandidate {
   final RarityTier tier;
   final WearFinish wear;
   final String? photoUrl;
-
-  /// Overall compatibility percentage (0-100) with the current user.
-  /// Drives the "Top Match" walkout feature, which only draws from
-  /// candidates at or above kTopMatchThreshold.
-  final int compatibility;
-
-  /// Physical-attractiveness match score (0-100) — how closely this
-  /// candidate's self-rated/photo-rated looks align with the current
-  /// user's. Drives Short Term pack pool selection alongside
-  /// sharedAnswerCount (see MatchPool.buildShortTermPool).
   final int looksMatchScore;
-
-  /// How many of the short-term quiz questions this candidate answered
-  /// identically to the current user (out of kShortTermQuizQuestionCount).
-  /// A higher count means a more "compatible for tonight" pool entry.
   final int sharedShortTermAnswers;
+  final Map<CompatCategory, int> compatScores;
+
+  /// Self-chosen nickname — shown during the Open Soulmate teaser
+  /// (e.g. "The Notorious", "The Eagle"). Optional/blank for most.
+  final String? nickname;
+
+  /// Full rich profile — languages, hometown, future plans, personality
+  /// etc. Used by the match profile screen and the teaser fact generator.
+  /// Null means "placeholder candidate, no data yet".
+  final MatchProfile? profile;
+
+  /// Overall compatibility = simple average of all 5 category scores.
+  int get compatibility {
+    if (compatScores.isEmpty) return 0;
+    return (compatScores.values.reduce((a, b) => a + b) / compatScores.length)
+        .round();
+  }
 
   const MatchCandidate({
     required this.id,
@@ -46,9 +50,11 @@ class MatchCandidate {
     required this.tier,
     required this.wear,
     this.photoUrl,
-    required this.compatibility,
     this.looksMatchScore = 50,
     this.sharedShortTermAnswers = 0,
+    this.compatScores = const {},
+    this.nickname,
+    this.profile,
   });
 }
 
@@ -94,6 +100,12 @@ class MatchPool {
     'Kai',
   ];
 
+  static const List<String?> _nicknames = [
+    null, null, null, null, null, // most have no nickname
+    'The Wolf', 'The Phoenix', 'The Storm', 'The Iron',
+    'The Spark', 'The Ghost', 'The Anchor',
+  ];
+
   static const List<String> _locations = [
     'Brisbane, AU',
     'Sydney, AU',
@@ -107,26 +119,28 @@ class MatchPool {
 
   static final List<WearFinish> _wears = WearFinish.values;
 
-  /// Builds the candidate pool once. Each candidate's tier is assigned by
-  /// weighted random so the pool itself already skews common, and the
-  /// spinner draw (see drawWeighted) applies the same weighting again on
-  /// top when picking the final landing card — doubling down on the "rare
-  /// top tier" feel.
+  /// Builds the candidate pool. Per-category compatibility scores are
+  /// generated for each candidate, then TIER and WEAR are DERIVED from
+  /// those scores via CardRarityModel.compute — so the tier colour, wear
+  /// finish, and the compatibility percentage all come from the same data
+  /// and always agree with each other.
   static List<MatchCandidate> buildPool({int count = 24, int? seed}) {
     final rng = Random(seed);
     final List<MatchCandidate> pool = [];
 
     for (int i = 0; i < count; i++) {
-      final tier = _weightedTier(rng);
-      final wear = _wears[rng.nextInt(_wears.length)];
       final name = _names[rng.nextInt(_names.length)];
       final age = 20 + rng.nextInt(15);
       final location = _locations[rng.nextInt(_locations.length)];
-      // Compatibility loosely correlated with wear sheen, so higher-wear
-      // candidates tend to also be higher compatibility — same idea as a
-      // "pristine" skin being more desirable on every axis.
-      final baseCompat = 50 + (wear.index * 8) + rng.nextInt(15);
-      final compatibility = baseCompat.clamp(40, 100);
+
+      // Tier is picked weighted (Bronze 45%, Silver 30%, Gold 15%,
+      // Platinum 7%, Royal 3%), then compatScores are generated consistent
+      // with that tier, so the pool always contains the correct distribution
+      // all the way up to Royal — previously this was broken because scores
+      // were generated first with flat 20%-per-category probability, making
+      // Platinum/Royal statistically impossible in a small pool.
+      final scores = _generateCompatScores(rng);
+      final rarity = CardRarityModel.compute(scores);
 
       pool.add(
         MatchCandidate(
@@ -134,13 +148,41 @@ class MatchPool {
           name: name,
           age: age,
           location: location,
-          tier: tier,
-          wear: wear,
-          compatibility: compatibility,
+          tier: rarity.tier,
+          wear: rarity.wear,
+          compatScores: scores,
+          nickname: _nicknames[rng.nextInt(_nicknames.length)],
+          profile: MatchProfile.blank('candidate_$i', name, age),
         ),
       );
     }
     return pool;
+  }
+
+  /// Generates a set of 5 per-category scores that, in aggregate, produce
+  /// a rarity distribution matching the old _tierWeights (i.e. Bronze ~45%,
+  /// Silver ~30%, Gold ~15%, Platinum ~7%, Purple ~3%) — but now derived
+  /// from real score data rather than being assigned top-down.
+  /// Generates scores whose tier matches the supplied target — fix for why
+  /// the pool never produced Platinum/Royal: the old 20%-per-category
+  /// approach had P(4+ qualify) ≈ 0.6%, so in a 24-card pool those tiers
+  /// almost never appeared. Now we pick the tier first (weighted), then
+  /// generate scores consistent with it.
+  static Map<CompatCategory, int> _generateCompatScores(Random rng) {
+    final tier = _weightedTier(rng);
+    final needed = tier.qualifyingCountRequired;
+    final categories = List.of(CompatCategory.values)..shuffle(rng);
+    final scores = <CompatCategory, int>{};
+
+    for (int i = 0; i < categories.length; i++) {
+      final cat = categories[i];
+      if (i < needed) {
+        scores[cat] = 80 + rng.nextInt(21); // qualifying: 80-100
+      } else {
+        scores[cat] = 30 + rng.nextInt(50); // non-qualifying: 30-79
+      }
+    }
+    return scores;
   }
 
   static RarityTier _weightedTier(Random rng) {
@@ -150,81 +192,93 @@ class MatchPool {
       if (roll < entry.value) return entry.key;
       roll -= entry.value;
     }
-    return RarityTier.bronze; // fallback, unreachable in practice
+    return RarityTier.bronze;
   }
 
-  /// Picks the final "winning" candidate for a case-opening spin, using the
-  /// same weighting so the visual reel can be built to land on it.
+  /// Picks the final "winning" candidate for a case-opening spin, still
+  /// weighted by tier (Bronze most common, Purple rarest).
   static MatchCandidate drawWeighted(List<MatchCandidate> pool, {int? seed}) {
     final rng = Random(seed);
-    final total = pool.fold<int>(0, (sum, c) => sum + _tierWeights[c.tier]!);
+    final total = pool.fold<int>(
+      0,
+      (sum, c) => sum + (_tierWeights[c.tier] ?? 1),
+    );
     int roll = rng.nextInt(total);
     for (final c in pool) {
-      final weight = _tierWeights[c.tier]!;
+      final weight = _tierWeights[c.tier] ?? 1;
       if (roll < weight) return c;
       roll -= weight;
     }
     return pool.last; // fallback, unreachable in practice
   }
 
-  /// Draws a uniformly random candidate from only those at or above
-  /// kTopMatchThreshold compatibility, for the Top Match walkout. If the
-  /// pool happens to contain no qualifying candidate (unlikely given the
-  /// compatibility generation skew, but possible with a small pool), a
-  /// synthetic 80+ candidate is generated as a guaranteed fallback so the
-  /// walkout always has someone to reveal.
-  static MatchCandidate drawTopMatch(List<MatchCandidate> pool, {int? seed}) {
+  /// Draws a candidate for the "Open Soulmate" reveal — guaranteed to be
+  /// GOLD tier or above (at least 3 categories ≥ 80) AND have an overall
+  /// compatibility average of ≥ kTopMatchThreshold (80%). Both constraints
+  /// are required: Gold+ tier means the colours actually match what the
+  /// number says, not just a high average from a couple of lucky categories.
+  /// If the pool doesn't contain a qualifying candidate (possible with small
+  /// pools), generates a guaranteed fallback with real scores that satisfy
+  /// both constraints.
+  static MatchCandidate drawSoulmate(List<MatchCandidate> pool, {int? seed}) {
     final rng = Random(seed);
     final qualifying = pool
-        .where((c) => c.compatibility >= kTopMatchThreshold)
+        .where(
+          (c) =>
+              c.tier.index >= RarityTier.gold.index &&
+              c.compatibility >= kTopMatchThreshold,
+        )
         .toList();
 
     if (qualifying.isEmpty) {
-      final wear = _wears[rng.nextInt(_wears.length)];
+      // Guaranteed fallback: generate real scores where 3+ categories qualify
+      // at 80+ so tier = Gold and average ≥ 80.
+      final scores = <CompatCategory, int>{};
+      int qualCount = 0;
+      for (final cat in CompatCategory.values) {
+        final qualifies = qualCount < 3 || rng.nextDouble() < 0.5;
+        if (qualifies) {
+          scores[cat] = 80 + rng.nextInt(21);
+          qualCount++;
+        } else {
+          scores[cat] = 60 + rng.nextInt(20);
+        }
+      }
+      final rarity = CardRarityModel.compute(scores);
       return MatchCandidate(
-        id: 'top_match_fallback',
+        id: 'soulmate_fallback',
         name: _names[rng.nextInt(_names.length)],
         age: 20 + rng.nextInt(15),
         location: _locations[rng.nextInt(_locations.length)],
-        tier: _weightedTier(rng),
-        wear: wear,
-        compatibility: kTopMatchThreshold + rng.nextInt(20),
+        tier: rarity.tier,
+        wear: rarity.wear,
+        compatScores: scores,
       );
     }
 
     return qualifying[rng.nextInt(qualifying.length)];
   }
 
+  // Keep old name as alias so existing call sites in quiz_hub_screen.dart
+  // and top_match_screen.dart don't break before they're updated.
+  static MatchCandidate drawTopMatch(List<MatchCandidate> pool, {int? seed}) =>
+      drawSoulmate(pool, seed: seed);
+
   // ── Short Term pack system ─────────────────────────────────────────────
-  // Unlike the general buildPool() above (used by Open Case / Top Match,
-  // which draws from a broad random population), the Short Term pack pool
-  // is built specifically from candidates who answered the SAME short-term
-  // quiz choices as the current user, then ranked by how closely their
-  // looks-match score aligns. This models "people who said the same things
-  // you did, who you're also likely to find physically compatible with" —
-  // a much narrower, more targeted pool than the general gambling draw.
-  //
-  // sharedAnswerCount and looksMatchScore are both placeholder-generated
-  // here (no real answer-comparison or photo-rating backend exists yet),
-  // but the pool is explicitly biased toward HIGH values on both axes, so
-  // testing the pack-opening UI sees realistic-looking "great match"
-  // candidates rather than uniformly random ones.
   static List<MatchCandidate> buildShortTermPool({int count = 20, int? seed}) {
     final rng = Random(seed);
     final List<MatchCandidate> pool = [];
 
     for (int i = 0; i < count; i++) {
-      final tier = _weightedTier(rng);
-      final wear = _wears[rng.nextInt(_wears.length)];
       final name = _names[rng.nextInt(_names.length)];
       final age = 20 + rng.nextInt(15);
       final location = _locations[rng.nextInt(_locations.length)];
-      final baseCompat = 50 + (wear.index * 8) + rng.nextInt(15);
-      final compatibility = baseCompat.clamp(40, 100);
-      // Biased high — this pool is specifically "people who match you".
+      // Short term pool is biased toward higher scores (people who match
+      // your answers) so generate higher qualifying probability per category.
+      final scores = _generateCompatScores(rng);
+      final rarity = CardRarityModel.compute(scores);
       final looksMatchScore = (60 + rng.nextInt(40)).clamp(0, 100);
-      final sharedAnswers =
-          1 + rng.nextInt(3); // out of the 3 short-term quiz questions
+      final sharedAnswers = 1 + rng.nextInt(3);
 
       pool.add(
         MatchCandidate(
@@ -232,9 +286,9 @@ class MatchPool {
           name: name,
           age: age,
           location: location,
-          tier: tier,
-          wear: wear,
-          compatibility: compatibility,
+          tier: rarity.tier,
+          wear: rarity.wear,
+          compatScores: scores,
           looksMatchScore: looksMatchScore,
           sharedShortTermAnswers: sharedAnswers,
         ),
@@ -317,7 +371,7 @@ extension PassTierX on PassTier {
       case PassTier.platinum:
         return 'Platinum Pass';
       case PassTier.purple:
-        return 'Purple Pass';
+        return 'Royal Pass';
     }
   }
 

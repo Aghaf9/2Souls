@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/bottom_nav.dart';
+import '../../models/pool_membership.dart';
 import '../short_term_pack/short_term_hub_screen.dart';
 import 'quiz_hub_screen.dart';
 
@@ -36,6 +37,7 @@ class RelationshipTypeScreen extends StatefulWidget {
 class _RelationshipTypeScreenState extends State<RelationshipTypeScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _sheenCtrl;
+  final _membership = PoolMembershipStore.instance;
 
   @override
   void initState() {
@@ -44,36 +46,117 @@ class _RelationshipTypeScreenState extends State<RelationshipTypeScreen>
       vsync: this,
       duration: const Duration(seconds: 4),
     )..repeat();
+    _membership.addListener(_onMembershipChanged);
   }
 
   @override
   void dispose() {
     _sheenCtrl.dispose();
+    _membership.removeListener(_onMembershipChanged);
     super.dispose();
   }
 
-  void _goShortTerm(BuildContext context) {
+  void _onMembershipChanged() {
+    if (mounted) setState(() {});
+  }
+
+  // ── Pool confirmation dialog ────────────────────────────────────────────
+
+  Future<bool> _confirmJoin(BuildContext context, RelationshipPool pool) async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (dialogContext) => _PoolConfirmDialog(pool: pool),
+    );
+    return result == true;
+  }
+
+  // ── Navigation with join gate ──────────────────────────────────────────
+
+  Future<void> _goShortTerm(BuildContext context) async {
+    if (!_membership.isJoined(RelationshipPool.shortTerm)) {
+      final joined = await _confirmJoin(context, RelationshipPool.shortTerm);
+      if (!joined) return;
+      _membership.join(RelationshipPool.shortTerm);
+    }
+    if (!mounted) return;
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const ShortTermHubScreen()),
     );
   }
 
-  void _goLongTerm(BuildContext context) {
+  Future<void> _goLongTerm(BuildContext context) async {
+    if (!_membership.isJoined(RelationshipPool.longTerm)) {
+      final joined = await _confirmJoin(context, RelationshipPool.longTerm);
+      if (!joined) return;
+      _membership.join(RelationshipPool.longTerm);
+    }
+    if (!mounted) return;
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const QuizHubScreen()),
     );
   }
 
+  void _leavePool(RelationshipPool pool) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.panelBg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Text(
+          'Leave ${pool.displayName} pool?',
+          style: const TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        content: Text(
+          'You won\'t be unpacked by other users in the ${pool.displayName} pool anymore. You can rejoin anytime.',
+          style: TextStyle(
+            color: AppColors.textSecondary.withOpacity(0.8),
+            fontSize: 13,
+            height: 1.4,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _membership.leave(pool);
+            },
+            child: const Text(
+              'Leave',
+              style: TextStyle(
+                color: Color(0xFFE05B5B),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final inShortTerm = _membership.inShortTerm;
+    final inLongTerm = _membership.inLongTerm;
+
     return Scaffold(
       backgroundColor: AppColors.bgDark,
       body: Stack(
         children: [
-          // Long Term — upper-left triangle. Colours read as trust/warmth/
-          // stability: deep navy base with gold accent (commitment, value).
+          // Long Term — upper-left triangle
           Positioned.fill(
             child: ClipPath(
               clipper: _DiagonalClipper(isTop: true),
@@ -83,20 +166,22 @@ class _RelationshipTypeScreenState extends State<RelationshipTypeScreen>
                   animation: _sheenCtrl,
                   builder: (context, _) => _GlassPanel(
                     label: 'LONG TERM',
-                    subLabel: 'Find something real',
+                    subLabel: inLongTerm
+                        ? 'In pool \u2014 tap to enter'
+                        : 'Find something real',
                     baseColors: const [Color(0xFF1A2A5C), Color(0xFF0B1430)],
                     accentColor: AppColors.gold,
                     sheenT: _sheenCtrl.value,
                     icon: Icons.favorite_outline,
                     isTopTriangle: true,
+                    inPool: inLongTerm,
                   ),
                 ),
               ),
             ),
           ),
 
-          // Short Term — lower-right triangle. Colours read as heat/urgency/
-          // spontaneity: deep magenta-red base with hot purple accent.
+          // Short Term — lower-right triangle
           Positioned.fill(
             child: ClipPath(
               clipper: _DiagonalClipper(isTop: false),
@@ -106,30 +191,29 @@ class _RelationshipTypeScreenState extends State<RelationshipTypeScreen>
                   animation: _sheenCtrl,
                   builder: (context, _) => _GlassPanel(
                     label: 'SHORT TERM',
-                    subLabel: 'Tonight, no strings',
+                    subLabel: inShortTerm
+                        ? 'In pool \u2014 tap to enter'
+                        : 'Tonight, no strings',
                     baseColors: const [Color(0xFF5C1A3A), Color(0xFF300B1E)],
                     accentColor: AppColors.purple,
-                    // Offset the sheen phase so the two panels don't shine
-                    // in lockstep.
                     sheenT: (_sheenCtrl.value + 0.5) % 1.0,
                     icon: Icons.bolt,
                     isTopTriangle: false,
+                    inPool: inShortTerm,
                   ),
                 ),
               ),
             ),
           ),
 
-          // Diagonal divider line, bottom-left to top-right
+          // Diagonal divider line
           Positioned.fill(
             child: IgnorePointer(
               child: CustomPaint(painter: _DividerLinePainter()),
             ),
           ),
 
-          // Close button — only shown when pushed on top of another screen.
-          // As a bottom-nav tab root (Home), there's nothing to pop back to,
-          // so this is hidden and BottomNav (below) is used for navigation.
+          // Close button (only when pushed on top of another screen)
           if (widget.showCloseButton)
             SafeArea(
               child: Padding(
@@ -157,6 +241,34 @@ class _RelationshipTypeScreenState extends State<RelationshipTypeScreen>
                 ),
               ),
             ),
+
+          // Leave-pool buttons — shown only when already a member.
+          // Upper-left corner = Long Term leave button.
+          // Lower-right corner = Short Term leave button.
+          SafeArea(
+            child: Stack(
+              children: [
+                if (inLongTerm)
+                  Positioned(
+                    top: 14,
+                    right: 14,
+                    child: _LeaveButton(
+                      label: 'Leave Long Term',
+                      onTap: () => _leavePool(RelationshipPool.longTerm),
+                    ),
+                  ),
+                if (inShortTerm)
+                  Positioned(
+                    bottom: 14,
+                    left: 14,
+                    child: _LeaveButton(
+                      label: 'Leave Short Term',
+                      onTap: () => _leavePool(RelationshipPool.shortTerm),
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ],
       ),
       bottomNavigationBar: widget.showCloseButton
@@ -243,14 +355,10 @@ class _GlassPanel extends StatelessWidget {
   final String subLabel;
   final List<Color> baseColors;
   final Color accentColor;
-  final double sheenT; // 0-1 looping
+  final double sheenT;
   final IconData icon;
-
-  /// True for the upper-left triangle, false for the lower-right triangle.
-  /// Used to position the label at that triangle's actual visual centroid
-  /// rather than the rectangle's center (which would sit outside or right
-  /// on the clipped edge for a triangular region).
   final bool isTopTriangle;
+  final bool inPool;
 
   const _GlassPanel({
     required this.label,
@@ -260,6 +368,7 @@ class _GlassPanel extends StatelessWidget {
     required this.sheenT,
     required this.icon,
     required this.isTopTriangle,
+    this.inPool = false,
   });
 
   @override
@@ -269,12 +378,6 @@ class _GlassPanel extends StatelessWidget {
         final w = constraints.maxWidth;
         final h = constraints.maxHeight;
 
-        // Anchor the label right at the triangle's 90-degree corner, with a
-        // small FIXED pixel inset (not a fraction of screen size) so it sits
-        // just inside the corner consistently on any device or window size.
-        // Upper-left triangle's right-angle vertex is the screen's top-left
-        // corner (0,0). Lower-right triangle's right-angle vertex is the
-        // screen's bottom-right corner (w,h).
         const inset = 28.0;
 
         final anchorAlignment = isTopTriangle
@@ -361,6 +464,32 @@ class _GlassPanel extends StatelessWidget {
                             letterSpacing: 0.4,
                           ),
                         ),
+                        if (inPool) ...[
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 7,
+                                height: 7,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFF50C878),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 5),
+                              const Text(
+                                'IN POOL',
+                                style: TextStyle(
+                                  color: Color(0xFF50C878),
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 1.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -427,3 +556,139 @@ class _SheenPainter extends CustomPainter {
 //   )
 // Not added automatically since Home's layout wasn't part of this request.
 // ---------------------------------------------------------------------------
+
+// ── Pool confirmation dialog ────────────────────────────────────────────────
+
+class _PoolConfirmDialog extends StatelessWidget {
+  final RelationshipPool pool;
+  const _PoolConfirmDialog({required this.pool});
+
+  @override
+  Widget build(BuildContext context) {
+    final isLong = pool == RelationshipPool.longTerm;
+    final accentColor = isLong ? AppColors.gold : AppColors.purple;
+
+    return Dialog(
+      backgroundColor: AppColors.panelBg,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(22),
+        side: BorderSide(color: accentColor.withOpacity(0.4)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(pool.emoji, style: const TextStyle(fontSize: 36)),
+            const SizedBox(height: 12),
+            Text(
+              'Join ${pool.displayName}?',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: accentColor,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              pool.description,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppColors.textSecondary.withOpacity(0.85),
+                fontSize: 13,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      side: BorderSide(
+                        color: AppColors.textSecondary.withOpacity(0.3),
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text(
+                      'Not Now',
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(context).pop(true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: accentColor,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text(
+                      'Join',
+                      style: TextStyle(
+                        color: isLong ? Colors.black : Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Leave pool button ────────────────────────────────────────────────────────
+
+class _LeaveButton extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+  const _LeaveButton({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.45),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white.withOpacity(0.2)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.exit_to_app, color: Colors.white70, size: 13),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

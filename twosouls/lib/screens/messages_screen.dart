@@ -1,10 +1,15 @@
 import 'dart:async';
+import 'dart:math';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../widgets/bottom_nav.dart';
 import '../widgets/floor_cards_background.dart';
+import '../widgets/identicon_avatar.dart';
+import '../ads/ad_banner_widget.dart';
 import '../theme/app_colors.dart';
 import '../models/card_rarity_model.dart';
 import '../models/match_pool.dart';
+import 'match_profile_screen.dart';
 import 'profile_screen.dart' show RarityTierVisuals, wearAdjustedGradient;
 
 // ---------------------------------------------------------------------------
@@ -37,13 +42,11 @@ class MatchEntry {
   final RarityTier tier;
   final WearFinish wear;
   final String? photoUrl;
-
-  /// When this match was claimed (won from a case or the Top Match
-  /// walkout). Drives the 24h expiry: if not moved into Chats within
-  /// kExpiryWindow of claimedAt, it's automatically removed from the
-  /// Collections pool and "re-entered into the dating pool" (i.e. simply
-  /// discarded here, since there's no real dating pool to return it to).
   final DateTime claimedAt;
+
+  /// The original candidate this match came from. Kept so "View Profile"
+  /// can navigate to the full MatchProfileScreen without losing any data.
+  final MatchCandidate? candidate;
 
   const MatchEntry({
     required this.id,
@@ -52,16 +55,23 @@ class MatchEntry {
     required this.wear,
     this.photoUrl,
     required this.claimedAt,
+    this.candidate,
   });
 
   factory MatchEntry.fromCandidate(MatchCandidate c) {
     return MatchEntry(
-      id: c.id,
+      // Generate a unique entry ID at claim time. Using the candidate's
+      // id (c.id) caused the multi-select bug: the same candidate can
+      // appear multiple times in a reel or be won across separate opens,
+      // so two MatchEntries would share an id — making _selectedIds.contains()
+      // return true for all of them simultaneously.
+      id: 'entry_${DateTime.now().microsecondsSinceEpoch}_${c.id}',
       name: c.name,
       tier: c.tier,
       wear: c.wear,
       photoUrl: c.photoUrl,
       claimedAt: DateTime.now(),
+      candidate: c,
     );
   }
 
@@ -93,7 +103,7 @@ class CollectionStore extends ChangeNotifier {
 
   /// A claimed match not moved into Chats within this window is removed
   /// from Collections automatically (re-entered into the dating pool).
-  static const Duration kExpiryWindow = Duration(hours: 24);
+  static const Duration kExpiryWindow = Duration(days: 14);
 
   final List<MatchEntry> matches = [];
   // Exactly 3 chat slots, by index 0 (Priority), 1, 2. Null = empty.
@@ -159,6 +169,60 @@ class CollectionStore extends ChangeNotifier {
       if (chats[i] == entry) chats[i] = null;
     }
     _notifySafely();
+  }
+
+  /// Trade-Up Contract: remove 10 cards of [tier] from the collection
+  /// and add 1 randomly-generated card of the next tier up.
+  /// Returns the new card if the trade succeeded, null if not enough cards.
+  MatchEntry? tradeUp({
+    required RarityTier tier,
+    required List<MatchEntry> selected,
+  }) {
+    assert(selected.length == kTradeUpCount);
+    final nextTier = _nextTier(tier);
+    if (nextTier == null) return null; // Royal is already the highest
+
+    // Remove the traded cards
+    for (final card in selected) {
+      matches.removeWhere((m) => m == card);
+    }
+
+    // Generate a new card at the next tier
+    final rng = Random();
+    const names = ['Alex', 'Jordan', 'Sam', 'Riley', 'Morgan', 'Quinn', 'Drew'];
+    const locations = ['Brisbane, AU', 'Sydney, AU', 'Melbourne, AU'];
+    final wears = WearFinish.values;
+    final name = names[rng.nextInt(names.length)];
+    final newCard = MatchEntry(
+      id: 'tradeup_${DateTime.now().millisecondsSinceEpoch}',
+      name: name,
+      tier: nextTier,
+      wear: wears[rng.nextInt(wears.length)],
+      claimedAt: DateTime.now(),
+    );
+    matches.add(newCard);
+    _notifySafely();
+    return newCard;
+  }
+
+  /// Number of cards required for a trade-up contract.
+  static const int kTradeUpCount = 10;
+
+  static RarityTier? _nextTier(RarityTier tier) {
+    switch (tier) {
+      case RarityTier.bronze:
+        return RarityTier.silver;
+      case RarityTier.silver:
+        return RarityTier.gold;
+      case RarityTier.gold:
+        return RarityTier.platinum;
+      case RarityTier.platinum:
+        return RarityTier.purple;
+      case RarityTier.purple:
+        return null; // already highest
+      case RarityTier.none:
+        return null;
+    }
   }
 
   /// Removes any match older than kExpiryWindow that hasn't been moved
@@ -245,13 +309,14 @@ class _MessagesScreenState extends State<MessagesScreen> {
         },
         onViewProfile: () {
           Navigator.pop(sheetContext);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'View profile for ${entry.name} (not wired up yet)',
+          if (entry.candidate != null) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => MatchProfileScreen(candidate: entry.candidate!),
               ),
-            ),
-          );
+            );
+          }
         },
       ),
     );
@@ -359,10 +424,12 @@ class _MessagesScreenState extends State<MessagesScreen> {
                           onDropIntoSlot: _handleDropIntoSlot,
                           onSwapSlots: _handleSwapSlots,
                         ),
-                        const SizedBox(height: 22),
+                        const SizedBox(height: 12),
+                        const AdBannerWidget(),
+                        const SizedBox(height: 12),
                         if (unplacedMatches.isEmpty && store.matches.isEmpty)
                           const _EmptyState()
-                        else
+                        else ...[
                           ...tierOrder
                               .where((t) => grouped.containsKey(t))
                               .map(
@@ -372,6 +439,39 @@ class _MessagesScreenState extends State<MessagesScreen> {
                                   onTapCard: _showUnplacedActions,
                                 ),
                               ),
+                          // Trade-Up Contract — always show when user has
+                          // any cards, so they can see progress toward 3.
+                          if (unplacedMatches.isNotEmpty) ...[
+                            const SizedBox(height: 20),
+                            _TradeUpSection(
+                              grouped: grouped,
+                              onTradeUp: (tier, selected) {
+                                final newCard = CollectionStore.instance
+                                    .tradeUp(tier: tier, selected: selected);
+                                if (newCard != null && mounted) {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => _TradeUpRevealScreen(
+                                        newCard: newCard,
+                                      ),
+                                    ),
+                                  ).then((_) {
+                                    if (mounted)
+                                      setState(() => _justAddedId = newCard.id);
+                                    Future.delayed(
+                                      const Duration(milliseconds: 900),
+                                      () {
+                                        if (mounted)
+                                          setState(() => _justAddedId = null);
+                                      },
+                                    );
+                                  });
+                                }
+                              },
+                            ),
+                          ],
+                        ],
                       ],
                     ),
                   ),
@@ -827,12 +927,10 @@ class _MiniMatchCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: rc.withOpacity(0.5)),
                 ),
-                child: Center(
-                  child: Icon(
-                    Icons.person,
-                    color: rc.withOpacity(0.7),
-                    size: 24,
-                  ),
+                child: IdenticonAvatar(
+                  seed: entry.id,
+                  size: double.infinity,
+                  borderRadius: 8,
                 ),
               ),
             ),
@@ -877,21 +975,59 @@ class _CollectionCard extends StatelessWidget {
   }
 }
 
-class _CardLabel extends StatelessWidget {
+class _CardLabel extends StatefulWidget {
   final MatchEntry match;
   const _CardLabel({required this.match});
 
   @override
+  State<_CardLabel> createState() => _CardLabelState();
+}
+
+class _CardLabelState extends State<_CardLabel> {
+  Timer? _tick;
+
+  @override
+  void initState() {
+    super.initState();
+    // Rebuild every minute so the countdown stays accurate.
+    _tick = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _tick?.cancel();
+    super.dispose();
+  }
+
+  String _formatCountdown(Duration d) {
+    if (d.isNegative || d == Duration.zero) return 'Expiring';
+    if (d.inDays >= 1) return '${d.inDays}d left';
+    if (d.inHours >= 1) return '${d.inHours}h left';
+    return '${d.inMinutes}m left';
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final remaining = widget.match.timeUntilExpiry;
+    final isUrgent = remaining.inDays < 3;
+    final countdownColor = isUrgent
+        ? const Color(0xFFE05B5B)
+        : AppColors.textSecondary.withOpacity(0.6);
+
     return SizedBox(
       width: 78,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          AspectRatio(aspectRatio: 0.68, child: _MiniMatchCard(entry: match)),
+          AspectRatio(
+            aspectRatio: 0.68,
+            child: _MiniMatchCard(entry: widget.match),
+          ),
           const SizedBox(height: 4),
           Text(
-            match.name,
+            widget.match.name,
             style: const TextStyle(
               color: AppColors.textPrimary,
               fontSize: 10,
@@ -901,14 +1037,34 @@ class _CardLabel extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
           Text(
-            match.wear.label,
+            widget.match.wear.label,
             style: TextStyle(
-              color: match.tier.primaryColor.withOpacity(0.8),
+              color: widget.match.tier.primaryColor.withOpacity(0.8),
               fontSize: 8,
               fontWeight: FontWeight.w600,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 2),
+          // Countdown row — clock icon + time remaining
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.access_time, color: countdownColor, size: 8),
+              const SizedBox(width: 2),
+              Text(
+                _formatCountdown(remaining),
+                style: TextStyle(
+                  color: countdownColor,
+                  fontSize: 8,
+                  fontWeight: isUrgent ? FontWeight.w700 : FontWeight.w500,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
           ),
         ],
       ),
@@ -1255,3 +1411,986 @@ class _GuessChatScreen extends StatelessWidget {
 // one exists. Right now everything lives only in the in-memory singleton
 // and resets on app restart.
 // ---------------------------------------------------------------------------
+
+// ── Trade-Up Contract ─────────────────────────────────────────────────────
+// CS:GO-inspired: select 10 cards of the same tier to receive 1 card of
+// the next tier up. Bronze×10 → Silver, Silver×10 → Gold, and so on up
+// to Platinum×10 → Royal. Royal cards cannot be traded up further.
+
+class _TradeUpSection extends StatelessWidget {
+  final Map<RarityTier, List<MatchEntry>> grouped;
+  final void Function(RarityTier tier, List<MatchEntry> selected) onTradeUp;
+
+  const _TradeUpSection({required this.grouped, required this.onTradeUp});
+
+  @override
+  Widget build(BuildContext context) {
+    // Show ALL tiers present in the collection that could potentially
+    // trade up (i.e. not already Royal). Eligible ones are tappable;
+    // ineligible ones show a "X / 3 cards" progress bar so the user
+    // knows exactly how many more they need.
+    const tierOrder = [
+      RarityTier.bronze,
+      RarityTier.silver,
+      RarityTier.gold,
+      RarityTier.platinum,
+    ]; // Royal is excluded — can't trade up further
+
+    final tiersWithCards = tierOrder
+        .where((t) => grouped.containsKey(t))
+        .toList();
+
+    if (tiersWithCards.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 4,
+              height: 16,
+              decoration: BoxDecoration(
+                color: AppColors.gold,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Text(
+              'TRADE-UP CONTRACT',
+              style: TextStyle(
+                color: AppColors.gold,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 2,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Padding(
+          padding: const EdgeInsets.only(left: 12),
+          child: Text(
+            'Trade ${CollectionStore.kTradeUpCount} cards of the same tier for 1 card of the next tier up.',
+            style: TextStyle(
+              color: AppColors.textSecondary.withOpacity(0.7),
+              fontSize: 11,
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        ...tiersWithCards.map((tier) {
+          final cards = grouped[tier]!;
+          final rc = tier.primaryColor;
+          final next = CollectionStore._nextTier(tier)!;
+          final isEligible = cards.length >= CollectionStore.kTradeUpCount;
+          final progress = (cards.length / CollectionStore.kTradeUpCount).clamp(
+            0.0,
+            1.0,
+          );
+
+          return GestureDetector(
+            onTap: isEligible
+                ? () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => _TradeUpSelectionScreen(
+                        tier: tier,
+                        cards: cards,
+                        onConfirm: (selected) {
+                          Navigator.of(context).pop();
+                          onTradeUp(tier, selected);
+                        },
+                      ),
+                    ),
+                  )
+                : null,
+            child: Opacity(
+              opacity: isEligible ? 1.0 : 0.65,
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppColors.panelBg,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: isEligible
+                        ? rc.withOpacity(0.6)
+                        : rc.withOpacity(0.25),
+                    width: isEligible ? 1.4 : 1.0,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: rc.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: rc.withOpacity(0.5)),
+                          ),
+                          child: Text(
+                            '${CollectionStore.kTradeUpCount}×',
+                            style: TextStyle(
+                              color: rc,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          tier.label,
+                          style: TextStyle(
+                            color: rc,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Icon(
+                          Icons.arrow_forward,
+                          color: AppColors.textSecondary.withOpacity(0.5),
+                          size: 16,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '1×',
+                          style: TextStyle(
+                            color: next.primaryColor,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          next.label,
+                          style: TextStyle(
+                            color: next.primaryColor,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const Spacer(),
+                        if (isEligible)
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.check_circle,
+                                color: AppColors.emerald,
+                                size: 14,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Ready!',
+                                style: TextStyle(
+                                  color: AppColors.emerald,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          )
+                        else
+                          Text(
+                            '${cards.length} / ${CollectionStore.kTradeUpCount}',
+                            style: TextStyle(
+                              color: AppColors.textSecondary.withOpacity(0.7),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        if (isEligible) ...[
+                          const SizedBox(width: 6),
+                          Icon(
+                            Icons.chevron_right,
+                            color: rc.withOpacity(0.6),
+                            size: 18,
+                          ),
+                        ],
+                      ],
+                    ),
+                    if (!isEligible) ...[
+                      const SizedBox(height: 8),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: progress,
+                          minHeight: 4,
+                          backgroundColor: Colors.white.withOpacity(0.07),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            rc.withOpacity(0.6),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Need ${CollectionStore.kTradeUpCount - cards.length} more ${tier.label} card${CollectionStore.kTradeUpCount - cards.length == 1 ? '' : 's'}',
+                        style: TextStyle(
+                          color: AppColors.textSecondary.withOpacity(0.5),
+                          fontSize: 10,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          );
+        }),
+      ],
+    );
+  }
+}
+
+// ── Trade-Up Selection Screen ─────────────────────────────────────────────
+
+class _TradeUpSelectionScreen extends StatefulWidget {
+  final RarityTier tier;
+  final List<MatchEntry> cards;
+  final void Function(List<MatchEntry> selected) onConfirm;
+
+  const _TradeUpSelectionScreen({
+    required this.tier,
+    required this.cards,
+    required this.onConfirm,
+  });
+
+  @override
+  State<_TradeUpSelectionScreen> createState() =>
+      _TradeUpSelectionScreenState();
+}
+
+class _TradeUpSelectionScreenState extends State<_TradeUpSelectionScreen> {
+  final Set<String> _selectedIds = {};
+
+  bool get _canConfirm => _selectedIds.length == CollectionStore.kTradeUpCount;
+  bool get _allSelected => _selectedIds.length >= CollectionStore.kTradeUpCount;
+
+  void _toggle(MatchEntry card) {
+    final isFull = _selectedIds.length >= CollectionStore.kTradeUpCount;
+    setState(() {
+      if (_selectedIds.contains(card.id)) {
+        _selectedIds.remove(card.id);
+      } else if (!isFull) {
+        _selectedIds.add(card.id);
+      }
+    });
+  }
+
+  void _selectAll() {
+    setState(() {
+      _selectedIds.clear();
+      // Pick the first kTradeUpCount cards
+      for (final card in widget.cards.take(CollectionStore.kTradeUpCount)) {
+        _selectedIds.add(card.id);
+      }
+    });
+  }
+
+  void _clearAll() {
+    setState(() => _selectedIds.clear());
+  }
+
+  void _confirmTrade() {
+    if (!_canConfirm) return;
+    final selected = widget.cards
+        .where((c) => _selectedIds.contains(c.id))
+        .toList();
+    widget.onConfirm(selected);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final rc = widget.tier.primaryColor;
+    final next = CollectionStore._nextTier(widget.tier)!;
+    final leftoverCount = widget.cards.length - CollectionStore.kTradeUpCount;
+
+    return Scaffold(
+      backgroundColor: AppColors.bgDark,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // ── Header ────────────────────────────────────────────────────
+            Container(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: Color(0x22B44CFF))),
+              ),
+              child: Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => Navigator.of(context).pop(),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: AppColors.panelBg,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0x33B44CFF)),
+                      ),
+                      child: const Icon(
+                        Icons.arrow_back,
+                        color: AppColors.textSecondary,
+                        size: 16,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'TRADE-UP CONTRACT',
+                          style: TextStyle(
+                            color: rc,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 2,
+                          ),
+                        ),
+                        Text(
+                          '${_selectedIds.length} / ${CollectionStore.kTradeUpCount} selected  →  1× ${next.label}',
+                          style: TextStyle(
+                            color: AppColors.textSecondary.withOpacity(0.7),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Trade Up button
+                  AnimatedOpacity(
+                    duration: const Duration(milliseconds: 200),
+                    opacity: _canConfirm ? 1.0 : 0.35,
+                    child: GestureDetector(
+                      onTap: _canConfirm ? _confirmTrade : null,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: rc.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: rc.withOpacity(0.5)),
+                        ),
+                        child: Text(
+                          'Trade Up',
+                          style: TextStyle(
+                            color: rc,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Progress bar ───────────────────────────────────────────────
+            LinearProgressIndicator(
+              value: (_selectedIds.length / CollectionStore.kTradeUpCount)
+                  .clamp(0.0, 1.0),
+              minHeight: 3,
+              backgroundColor: Colors.white.withOpacity(0.07),
+              valueColor: AlwaysStoppedAnimation<Color>(rc),
+            ),
+
+            // ── Select All / Clear row ─────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
+              child: Row(
+                children: [
+                  Text(
+                    '${widget.cards.length} ${widget.tier.label} cards',
+                    style: TextStyle(
+                      color: AppColors.textSecondary.withOpacity(0.6),
+                      fontSize: 11,
+                    ),
+                  ),
+                  const Spacer(),
+                  // Select All
+                  GestureDetector(
+                    onTap: _allSelected ? _clearAll : _selectAll,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _allSelected
+                            ? rc.withOpacity(0.15)
+                            : AppColors.panelBg,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: rc.withOpacity(0.4)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _allSelected ? Icons.deselect : Icons.select_all,
+                            color: rc,
+                            size: 14,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            _allSelected ? 'Clear All' : 'Select 10',
+                            style: TextStyle(
+                              color: rc,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Leftover note — shown when more than 10 cards exist
+            if (leftoverCount > 0)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 6),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      color: AppColors.textSecondary.withOpacity(0.45),
+                      size: 12,
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      '$leftoverCount card${leftoverCount == 1 ? '' : 's'} not selected will stay in your collection.',
+                      style: TextStyle(
+                        color: AppColors.textSecondary.withOpacity(0.5),
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            // ── Card grid ─────────────────────────────────────────────────
+            Expanded(
+              child: GridView.builder(
+                padding: const EdgeInsets.fromLTRB(14, 4, 14, 14),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 4,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
+                  childAspectRatio: 0.68,
+                ),
+                itemCount: widget.cards.length,
+                itemBuilder: (context, index) {
+                  final card = widget.cards[index];
+                  final isSelected = _selectedIds.contains(card.id);
+                  final isFull =
+                      _selectedIds.length >= CollectionStore.kTradeUpCount;
+
+                  return GestureDetector(
+                    // ValueKey is the critical fix — without it GridView
+                    // reuses render objects for different cards as you scroll,
+                    // causing tapping card A to visually appear to select
+                    // card B. The key forces Flutter to treat each card as
+                    // a unique widget that can never be reused for another.
+                    key: ValueKey(card.id),
+                    onTap: () => _toggle(card),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isSelected
+                              ? AppColors.gold
+                              : rc.withOpacity(
+                                  isSelected || !isFull ? 0.3 : 0.15,
+                                ),
+                          width: isSelected ? 2.2 : 1.0,
+                        ),
+                        boxShadow: isSelected
+                            ? [
+                                BoxShadow(
+                                  color: AppColors.gold.withOpacity(0.45),
+                                  blurRadius: 8,
+                                ),
+                              ]
+                            : [],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(9),
+                        child: Stack(
+                          children: [
+                            _MiniMatchCard(entry: card),
+                            // Gold check badge when selected
+                            if (isSelected)
+                              Positioned(
+                                top: 3,
+                                right: 3,
+                                child: Container(
+                                  padding: const EdgeInsets.all(2),
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.gold,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.check,
+                                    color: Colors.black,
+                                    size: 10,
+                                  ),
+                                ),
+                              ),
+                            // Dim overlay when full and this card isn't chosen
+                            if (!isSelected && isFull)
+                              Positioned.fill(
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.55),
+                                    borderRadius: BorderRadius.circular(9),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Trade-Up Reveal Screen ────────────────────────────────────────────────
+// Full-screen animated reveal after a successful trade-up contract.
+// Sequence: background glow fades in → rotating rays → "TRADE UP" label
+// → card slams up from below with elastic scale → "Add to Cards" button
+// slides up from off-screen.
+
+class _TradeUpRevealScreen extends StatefulWidget {
+  final MatchEntry newCard;
+  const _TradeUpRevealScreen({required this.newCard});
+
+  @override
+  State<_TradeUpRevealScreen> createState() => _TradeUpRevealScreenState();
+}
+
+class _TradeUpRevealScreenState extends State<_TradeUpRevealScreen>
+    with TickerProviderStateMixin {
+  late final AnimationController _bgCtrl;
+  late final AnimationController _cardCtrl;
+  late final AnimationController _particleCtrl;
+  late final Animation<double> _slideUp;
+  late final Animation<double> _scalePop;
+  bool _showButton = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _bgCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    );
+    _cardCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 750),
+    );
+    _particleCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+    )..repeat();
+
+    _slideUp = Tween<double>(begin: 1.0, end: 0.0).animate(
+      CurvedAnimation(
+        parent: _cardCtrl,
+        curve: const Interval(0.0, 0.6, curve: Curves.easeOutCubic),
+      ),
+    );
+    _scalePop =
+        TweenSequence([
+          TweenSequenceItem(tween: Tween(begin: 0.5, end: 1.22), weight: 55),
+          TweenSequenceItem(tween: Tween(begin: 1.22, end: 1.0), weight: 45),
+        ]).animate(
+          CurvedAnimation(parent: _cardCtrl, curve: const Interval(0.0, 0.90)),
+        );
+
+    _cardCtrl.addStatusListener((s) {
+      if (s == AnimationStatus.completed && mounted)
+        setState(() => _showButton = true);
+    });
+
+    _bgCtrl.forward().then((_) {
+      if (mounted) _cardCtrl.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _bgCtrl.dispose();
+    _cardCtrl.dispose();
+    _particleCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final rc = widget.newCard.tier.primaryColor;
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            // Radial glow
+            Positioned.fill(
+              child: AnimatedBuilder(
+                animation: _bgCtrl,
+                builder: (_, __) => Opacity(
+                  opacity: _bgCtrl.value,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: RadialGradient(
+                        center: const Alignment(0, -0.12),
+                        radius: 0.88,
+                        colors: [
+                          Color.lerp(Colors.black, rc, 0.38)!,
+                          const Color(0xFF070707),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            // Rotating rays
+            Positioned.fill(
+              child: AnimatedBuilder(
+                animation: Listenable.merge([_bgCtrl, _particleCtrl]),
+                builder: (_, __) => Opacity(
+                  opacity: (_bgCtrl.value * 0.75).clamp(0.0, 1.0),
+                  child: CustomPaint(
+                    painter: _TURevealRayPainter(
+                      t: _particleCtrl.value,
+                      color: rc,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            // Particles
+            Positioned.fill(
+              child: IgnorePointer(
+                child: AnimatedBuilder(
+                  animation: _particleCtrl,
+                  builder: (_, __) => CustomPaint(
+                    painter: _TURevealParticlePainter(
+                      t: _particleCtrl.value,
+                      color: rc,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            // Label + card
+            Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  AnimatedBuilder(
+                    animation: _bgCtrl,
+                    builder: (_, __) => Opacity(
+                      opacity: _bgCtrl.value,
+                      child: Column(
+                        children: [
+                          Text(
+                            'TRADE UP',
+                            style: TextStyle(
+                              color: AppColors.gold,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 5,
+                              shadows: [
+                                Shadow(
+                                  color: AppColors.gold.withOpacity(0.8),
+                                  blurRadius: 20,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'You got a ${widget.newCard.tier.label} card',
+                            style: TextStyle(
+                              color: AppColors.textSecondary.withOpacity(0.7),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  AnimatedBuilder(
+                    animation: _cardCtrl,
+                    builder: (_, child) => Transform.translate(
+                      offset: Offset(0, 280 * _slideUp.value),
+                      child: Transform.scale(
+                        scale: _scalePop.value,
+                        child: child,
+                      ),
+                    ),
+                    child: _TURevealCard(entry: widget.newCard, rc: rc),
+                  ),
+                ],
+              ),
+            ),
+            // Close
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: GestureDetector(
+                onTap: () => Navigator.of(context).pop(),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.5),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white.withOpacity(0.2)),
+                  ),
+                  child: const Icon(Icons.close, color: Colors.white, size: 18),
+                ),
+              ),
+            ),
+            // CTA button
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 450),
+              curve: Curves.easeOutCubic,
+              left: 24,
+              right: 24,
+              bottom: _showButton ? 24 : -100,
+              child: ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: rc,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  shadowColor: rc.withOpacity(0.6),
+                  elevation: 12,
+                ),
+                child: Text(
+                  'Add ${widget.newCard.name} to Cards',
+                  style: TextStyle(
+                    color: widget.newCard.tier == RarityTier.gold
+                        ? Colors.black
+                        : Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TURevealCard extends StatelessWidget {
+  final MatchEntry entry;
+  final Color rc;
+  const _TURevealCard({required this.entry, required this.rc});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 210,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color.lerp(Colors.black, rc, 0.6)!,
+            Color.lerp(Colors.black, rc, 0.25)!,
+          ],
+        ),
+        border: Border.all(color: AppColors.gold, width: 2.2),
+        boxShadow: [
+          BoxShadow(
+            color: rc.withOpacity(0.7),
+            blurRadius: 50,
+            spreadRadius: 6,
+          ),
+          BoxShadow(
+            color: AppColors.gold.withOpacity(0.4),
+            blurRadius: 30,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+            decoration: BoxDecoration(
+              color: AppColors.gold.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppColors.gold.withOpacity(0.6)),
+            ),
+            child: const Text(
+              'TRADE UP RESULT',
+              style: TextStyle(
+                color: AppColors.gold,
+                fontSize: 8,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 2,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          AspectRatio(
+            aspectRatio: 1,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: rc.withOpacity(0.8), width: 1.8),
+                color: rc.withOpacity(0.1),
+              ),
+              child: Center(child: Icon(Icons.person, color: rc, size: 48)),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            entry.name,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: rc.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: rc.withOpacity(0.6)),
+            ),
+            child: Text(
+              '${entry.tier.label} \u2022 ${entry.wear.label}',
+              style: TextStyle(
+                color: rc,
+                fontSize: 9,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TURevealRayPainter extends CustomPainter {
+  final double t;
+  final Color color;
+  _TURevealRayPainter({required this.t, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height * 0.42);
+    final len = size.width * 1.1;
+    final angleOffset = t * 2 * math.pi;
+    for (int i = 0; i < 20; i++) {
+      final angle = (i / 20) * 2 * math.pi + angleOffset;
+      final isWide = i % 2 == 0;
+      final end = Offset(
+        center.dx + len * math.cos(angle),
+        center.dy + len * math.sin(angle),
+      );
+      canvas.drawLine(
+        center,
+        end,
+        Paint()
+          ..shader = LinearGradient(
+            colors: [
+              color.withOpacity(isWide ? 0.22 : 0.09),
+              color.withOpacity(0),
+            ],
+          ).createShader(Rect.fromPoints(center, end))
+          ..strokeWidth = isWide ? 36 : 14
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _TURevealRayPainter old) => old.t != t;
+}
+
+class _TURevealParticlePainter extends CustomPainter {
+  final double t;
+  final Color color;
+  static final List<_TUParticle> _pts = _build();
+  static List<_TUParticle> _build() {
+    final rng = Random(99);
+    return List.generate(
+      28,
+      (_) => _TUParticle(
+        x: rng.nextDouble(),
+        baseY: 0.2 + rng.nextDouble() * 0.65,
+        speed: 0.1 + rng.nextDouble() * 0.3,
+        size: 1.5 + rng.nextDouble() * 3.5,
+        phase: rng.nextDouble(),
+      ),
+    );
+  }
+
+  _TURevealParticlePainter({required this.t, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    for (final p in _pts) {
+      final lt = ((t + p.phase) % 1.0);
+      final y = (p.baseY - lt * p.speed) * size.height;
+      if (y < 0 || y > size.height) continue;
+      final opacity = (math.sin(lt * math.pi)).clamp(0.0, 1.0) * 0.65;
+      canvas.drawCircle(
+        Offset(p.x * size.width, y),
+        p.size,
+        Paint()..color = color.withOpacity(opacity),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _TURevealParticlePainter old) => old.t != t;
+}
+
+class _TUParticle {
+  final double x, baseY, speed, size, phase;
+  const _TUParticle({
+    required this.x,
+    required this.baseY,
+    required this.speed,
+    required this.size,
+    required this.phase,
+  });
+}

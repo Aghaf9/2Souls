@@ -1,7 +1,9 @@
+import '../widgets/identicon_avatar.dart';
 import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../widgets/bottom_nav.dart';
+import '../ads/ad_banner_widget.dart';
 import '../widgets/floor_cards_background.dart';
 import '../theme/app_colors.dart';
 import '../models/card_rarity_model.dart';
@@ -87,7 +89,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
   void _accept(IncomingUnpack person) {
     CollectionStore.instance.addEntryDirectly(
       MatchEntry(
-        id: person.id,
+        id: 'entry_${DateTime.now().microsecondsSinceEpoch}_${person.id}',
         name: person.name,
         tier: person.tier,
         wear: person.wear,
@@ -145,7 +147,10 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: const BottomNav(currentIndex: 1),
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [const AdBannerWidget(), const BottomNav(currentIndex: 1)],
+      ),
     );
   }
 }
@@ -407,8 +412,11 @@ class _UnpackCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: rc.withOpacity(0.6), width: 1.6),
               ),
-              child: Center(
-                child: Icon(Icons.person, color: rc.withOpacity(0.7), size: 56),
+              child: IdenticonAvatar(
+                seed: person.id,
+                size: double.infinity,
+                borderRadius: 16,
+                borderColor: rc.withOpacity(0.6),
               ),
             ),
           ),

@@ -14,8 +14,11 @@ import 'screens/discover_screen.dart';
 import 'screens/messages_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/quiz/relationship_type_screen.dart';
+import 'ads/ad_manager.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await AdManager.instance.initialize();
   runApp(const TwoSoulsApp());
 }
 

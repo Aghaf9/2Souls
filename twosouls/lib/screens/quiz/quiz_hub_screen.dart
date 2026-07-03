@@ -3,6 +3,7 @@ import '../../theme/app_colors.dart';
 import '../../widgets/floor_cards_background.dart';
 import '../../models/match_pool.dart';
 import '../../models/match_limits.dart';
+import '../../ads/ad_manager.dart';
 import '../case_opening/case_opening_screen.dart';
 import '../top_match/top_match_screen.dart';
 import '../messages_screen.dart' show CollectionStore;
@@ -58,6 +59,8 @@ class _QuizHubScreenState extends State<QuizHubScreen> {
         builder: (_) => CaseOpeningScreen(
           onWin: (MatchCandidate winner) {
             CollectionStore.instance.addWonMatch(winner);
+            // Show interstitial once the user claims their card.
+            AdManager.instance.showInterstitial();
           },
         ),
       ),
@@ -255,9 +258,9 @@ class _TopMatchBox extends StatelessWidget {
       onTap: onTap,
       enabled: canOpen,
       icon: Icons.workspace_premium,
-      title: 'FIND YOUR STRONGEST MATCH',
+      title: 'OPEN SOULMATE',
       subtitle: canOpen
-          ? 'Guaranteed 80%+ compatibility \u2014 once every 7 days'
+          ? 'Gold+ tier guaranteed 2014 your closest match this week'
           : 'Available again in ${MatchLimits.formatCountdown(countdown ?? Duration.zero)}',
     );
   }
