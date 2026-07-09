@@ -9,6 +9,7 @@ import '../ads/ad_banner_widget.dart';
 import '../theme/app_colors.dart';
 import '../models/card_rarity_model.dart';
 import '../models/match_pool.dart';
+import 'chat_screen.dart';
 import 'match_profile_screen.dart';
 import 'profile_screen.dart' show RarityTierVisuals, wearAdjustedGradient;
 
@@ -349,7 +350,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
           Navigator.pop(sheetContext);
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => _GuessChatScreen(match: entry)),
+            MaterialPageRoute(builder: (_) => ChatScreen(match: entry)),
           );
         },
         onDemote: () {
@@ -1322,83 +1323,6 @@ class _ActionRow extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Placeholder "guess chat" screen — stands in for real messaging ───────
-// Opened via "Open Chat" once a match is in a Chats slot. No real
-// messaging backend exists yet, so this is a static stub screen.
-
-class _GuessChatScreen extends StatelessWidget {
-  final MatchEntry match;
-  const _GuessChatScreen({required this.match});
-
-  @override
-  Widget build(BuildContext context) {
-    final rc = match.tier.primaryColor;
-    return Scaffold(
-      backgroundColor: AppColors.bgDark,
-      appBar: AppBar(
-        backgroundColor: AppColors.bgDark,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textSecondary),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Row(
-          children: [
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: rc.withOpacity(0.2),
-              child: Icon(Icons.person, color: rc, size: 18),
-            ),
-            const SizedBox(width: 10),
-            Text(
-              match.name,
-              style: const TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-      ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.chat_bubble_outline,
-                color: AppColors.textSecondary.withOpacity(0.4),
-                size: 40,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Chat with ${match.name} isn\u2019t wired up yet',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppColors.textSecondary.withOpacity(0.7),
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'This screen is a placeholder for the real messaging feature.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppColors.textSecondary.withOpacity(0.5),
-                  fontSize: 11,
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );

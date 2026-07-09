@@ -91,8 +91,10 @@ class _QuizHubScreenState extends State<QuizHubScreen> {
           children: [
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: const BoxDecoration(
-                border: Border(bottom: BorderSide(color: Color(0x22B44CFF))),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: AppColors.panelBorder),
+                ),
               ),
               child: Row(
                 children: [
@@ -103,7 +105,7 @@ class _QuizHubScreenState extends State<QuizHubScreen> {
                       decoration: BoxDecoration(
                         color: AppColors.panelBg,
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0x33B44CFF)),
+                        border: Border.all(color: AppColors.accentGlow),
                       ),
                       child: const Icon(
                         Icons.arrow_back,
@@ -116,7 +118,7 @@ class _QuizHubScreenState extends State<QuizHubScreen> {
                   const Text(
                     'LONG TERM',
                     style: TextStyle(
-                      color: AppColors.gold,
+                      color: AppColors.accent,
                       fontSize: 13,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 2,
@@ -196,15 +198,15 @@ class _HubActionBox extends StatelessWidget {
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [Color(0xFF2E2208), Color(0xFF161002)],
+              colors: [AppColors.surface, AppColors.bgDark],
             ),
             border: Border.all(
-              color: AppColors.gold.withOpacity(0.5),
+              color: AppColors.accent.withOpacity(0.5),
               width: 1.5,
             ),
             boxShadow: [
               BoxShadow(
-                color: AppColors.gold.withOpacity(0.18),
+                color: AppColors.accentGlow,
                 blurRadius: 22,
                 spreadRadius: 1,
               ),
@@ -212,13 +214,13 @@ class _HubActionBox extends StatelessWidget {
           ),
           child: Column(
             children: [
-              Icon(icon, color: AppColors.gold, size: 34),
+              Icon(icon, color: AppColors.accent, size: 34),
               const SizedBox(height: 10),
               Text(
                 title,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                  color: AppColors.gold,
+                  color: AppColors.textPrimary,
                   fontSize: 15,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 1.2,
@@ -260,7 +262,7 @@ class _TopMatchBox extends StatelessWidget {
       icon: Icons.workspace_premium,
       title: 'OPEN SOULMATE',
       subtitle: canOpen
-          ? 'Gold+ tier guaranteed 2014 your closest match this week'
+          ? 'Gold+ tier guaranteed \u2014 your closest match this week'
           : 'Available again in ${MatchLimits.formatCountdown(countdown ?? Duration.zero)}',
     );
   }

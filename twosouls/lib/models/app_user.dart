@@ -29,6 +29,11 @@ class AppUser {
   final String? sexualOrientation;
   final String? lookingFor;
 
+  // Country of birth — ISO 3166-1 alpha-2 code (e.g. "AU", "US", "GB"),
+  // used to render the flag on the Face Rank FIFA-style card. Null until
+  // the user picks one via the profile edit / signup country dropdown.
+  final String? countryCode;
+
   // Pool membership
   final bool inShortTermPool;
   final bool inLongTermPool;
@@ -52,6 +57,7 @@ class AppUser {
     this.careerId,
     this.sexualOrientation,
     this.lookingFor,
+    this.countryCode,
     this.inShortTermPool = false,
     this.inLongTermPool = false,
     this.compatScores = const {
@@ -66,7 +72,8 @@ class AppUser {
   int get age {
     final now = DateTime.now();
     int age = now.year - dob.year;
-    if (now.month < dob.month || (now.month == dob.month && now.day < dob.day)) {
+    if (now.month < dob.month ||
+        (now.month == dob.month && now.day < dob.day)) {
       age--;
     }
     return age;
@@ -77,47 +84,52 @@ class AppUser {
   factory AppUser.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>;
     return AppUser(
-      uid:               doc.id,
-      email:             d['email'] ?? '',
-      name:              d['name'] ?? '',
-      dob:               (d['dob'] as Timestamp?)?.toDate() ?? DateTime(2000),
-      createdAt:         (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      bio:               d['bio'] ?? '',
-      career:            d['career'] ?? '',
-      institution:       d['institution'] ?? '',
-      location:          d['location'] ?? '',
-      photoUrl:          d['photoUrl'],
-      looksScore:        d['looksScore'],
-      hobbyIds:          List<String>.from(d['hobbyIds'] ?? []),
-      careerId:          d['careerId'],
+      uid: doc.id,
+      email: d['email'] ?? '',
+      name: d['name'] ?? '',
+      dob: (d['dob'] as Timestamp?)?.toDate() ?? DateTime(2000),
+      createdAt: (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      bio: d['bio'] ?? '',
+      career: d['career'] ?? '',
+      institution: d['institution'] ?? '',
+      location: d['location'] ?? '',
+      photoUrl: d['photoUrl'],
+      looksScore: d['looksScore'],
+      hobbyIds: List<String>.from(d['hobbyIds'] ?? []),
+      careerId: d['careerId'],
       sexualOrientation: d['sexualOrientation'],
-      lookingFor:        d['lookingFor'],
-      inShortTermPool:   d['inShortTermPool'] ?? false,
-      inLongTermPool:    d['inLongTermPool'] ?? false,
-      compatScores:      Map<String, int>.from(
-        (d['compatScores'] as Map?)?.map((k, v) => MapEntry(k.toString(), (v as num).toInt())) ?? {},
+      lookingFor: d['lookingFor'],
+      countryCode: d['countryCode'],
+      inShortTermPool: d['inShortTermPool'] ?? false,
+      inLongTermPool: d['inLongTermPool'] ?? false,
+      compatScores: Map<String, int>.from(
+        (d['compatScores'] as Map?)?.map(
+              (k, v) => MapEntry(k.toString(), (v as num).toInt()),
+            ) ??
+            {},
       ),
     );
   }
 
   Map<String, dynamic> toFirestore() => {
-    'uid':               uid,
-    'email':             email,
-    'name':              name,
-    'dob':               Timestamp.fromDate(dob),
-    'bio':               bio,
-    'career':            career,
-    'institution':       institution,
-    'location':          location,
-    'photoUrl':          photoUrl,
-    'looksScore':        looksScore,
-    'hobbyIds':          hobbyIds,
-    'careerId':          careerId,
+    'uid': uid,
+    'email': email,
+    'name': name,
+    'dob': Timestamp.fromDate(dob),
+    'bio': bio,
+    'career': career,
+    'institution': institution,
+    'location': location,
+    'photoUrl': photoUrl,
+    'looksScore': looksScore,
+    'hobbyIds': hobbyIds,
+    'careerId': careerId,
     'sexualOrientation': sexualOrientation,
-    'lookingFor':        lookingFor,
-    'inShortTermPool':   inShortTermPool,
-    'inLongTermPool':    inLongTermPool,
-    'compatScores':      compatScores,
+    'lookingFor': lookingFor,
+    'countryCode': countryCode,
+    'inShortTermPool': inShortTermPool,
+    'inLongTermPool': inLongTermPool,
+    'compatScores': compatScores,
   };
 
   AppUser copyWith({
@@ -131,29 +143,31 @@ class AppUser {
     String? careerId,
     String? sexualOrientation,
     String? lookingFor,
+    String? countryCode,
     bool? inShortTermPool,
     bool? inLongTermPool,
     Map<String, int>? compatScores,
   }) {
     return AppUser(
-      uid:               uid,
-      email:             email,
-      name:              name,
-      dob:               dob,
-      createdAt:         createdAt,
-      bio:               bio ?? this.bio,
-      career:            career ?? this.career,
-      institution:       institution ?? this.institution,
-      location:          location ?? this.location,
-      photoUrl:          photoUrl ?? this.photoUrl,
-      looksScore:        looksScore ?? this.looksScore,
-      hobbyIds:          hobbyIds ?? this.hobbyIds,
-      careerId:          careerId ?? this.careerId,
+      uid: uid,
+      email: email,
+      name: name,
+      dob: dob,
+      createdAt: createdAt,
+      bio: bio ?? this.bio,
+      career: career ?? this.career,
+      institution: institution ?? this.institution,
+      location: location ?? this.location,
+      photoUrl: photoUrl ?? this.photoUrl,
+      looksScore: looksScore ?? this.looksScore,
+      hobbyIds: hobbyIds ?? this.hobbyIds,
+      careerId: careerId ?? this.careerId,
       sexualOrientation: sexualOrientation ?? this.sexualOrientation,
-      lookingFor:        lookingFor ?? this.lookingFor,
-      inShortTermPool:   inShortTermPool ?? this.inShortTermPool,
-      inLongTermPool:    inLongTermPool ?? this.inLongTermPool,
-      compatScores:      compatScores ?? this.compatScores,
+      lookingFor: lookingFor ?? this.lookingFor,
+      countryCode: countryCode ?? this.countryCode,
+      inShortTermPool: inShortTermPool ?? this.inShortTermPool,
+      inLongTermPool: inLongTermPool ?? this.inLongTermPool,
+      compatScores: compatScores ?? this.compatScores,
     );
   }
 }

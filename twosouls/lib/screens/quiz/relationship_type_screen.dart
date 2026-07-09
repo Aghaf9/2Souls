@@ -137,7 +137,7 @@ class _RelationshipTypeScreenState extends State<RelationshipTypeScreen>
             child: const Text(
               'Leave',
               style: TextStyle(
-                color: Color(0xFFE05B5B),
+                color: AppColors.danger,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -563,8 +563,12 @@ class _PoolConfirmDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isLong = pool == RelationshipPool.longTerm;
-    final accentColor = isLong ? AppColors.gold : AppColors.purple;
+    // Always the brand accent (royal blue) — this used to swap between
+    // gold (Long Term) and purple (Short Term), which made the "Join"
+    // button look like two different apps depending on which pool you
+    // tapped. The confirmation action itself should read the same
+    // regardless of which pool triggered it.
+    const accentColor = AppColors.accent;
 
     return Dialog(
       backgroundColor: AppColors.panelBg,
@@ -582,7 +586,7 @@ class _PoolConfirmDialog extends StatelessWidget {
             Text(
               'Join ${pool.displayName}?',
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 color: accentColor,
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
@@ -634,10 +638,10 @@ class _PoolConfirmDialog extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: Text(
+                    child: const Text(
                       'Join',
                       style: TextStyle(
-                        color: isLong ? Colors.black : Colors.white,
+                        color: AppColors.textPrimary,
                         fontWeight: FontWeight.w800,
                         fontSize: 14,
                       ),

@@ -27,11 +27,11 @@ class TwoSoulsApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: AppColors.bgDark,
+        scaffoldBackgroundColor: Colors.transparent,
         colorScheme: ColorScheme.dark(
           primary: AppColors.accent,
           secondary: AppColors.accentSoft,
-          surface: AppColors.surface,
+          surface: const Color(0xFF0D1033),
         ),
       ),
       // Start at login screen. LoginScreen has a "Skip for now" link
