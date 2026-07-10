@@ -1,6 +1,6 @@
 name: twosouls
 description: "2Souls dating app."
-publish_to: 'none'
+publish_to: "none"
 version: 1.0.0+1
 
 environment:
@@ -27,6 +27,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  http: ^1.2.0
 
 flutter:
   uses-material-design: true
