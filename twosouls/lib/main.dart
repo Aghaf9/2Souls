@@ -1,25 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'theme/app_colors.dart';
 import 'ads/ad_manager.dart';
-import 'screens/auth/login_screen.dart';
+import 'services/auth_service.dart';
+import 'screens/auth/google_login_screen.dart';
+import 'screens/auth/post_auth_onboarding_screen.dart';
 import 'screens/main_shell.dart';
-
-// Firebase is commented out until flutterfire configure is completed.
-// Uncomment once firebase_options.dart has real credentials:
-//
-// import 'package:firebase_core/firebase_core.dart';
-// import 'firebase_options.dart';
-// import 'screens/auth/auth_gate.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await AuthService.instance.initializeGoogleSignIn();
   await AdManager.instance.initialize();
   runApp(const TwoSoulsApp());
 }
 
 class TwoSoulsApp extends StatelessWidget {
   const TwoSoulsApp({super.key});
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -34,27 +32,38 @@ class TwoSoulsApp extends StatelessWidget {
           surface: const Color(0xFF0D1033),
         ),
       ),
-      // Start at login screen. LoginScreen has a "Skip for now" link
-      // to go to the shell for testing, or sign in to go to the shell.
       home: const _AppRouter(),
     );
   }
 }
 
-// Simple router — shows login until the user taps "Skip" or signs in
 class _AppRouter extends StatefulWidget {
   const _AppRouter();
-
   @override
   State<_AppRouter> createState() => _AppRouterState();
 }
 
+enum _AppState { loggedOut, onboarding, main }
+
 class _AppRouterState extends State<_AppRouter> {
-  bool _authed = false;
+  _AppState _state = _AppState.loggedOut;
+
+  void _handleLoginResult(bool isNewUser) {
+    setState(() => _state = isNewUser ? _AppState.onboarding : _AppState.main);
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (_authed) return const MainShell();
-    return LoginScreen(onSuccess: () => setState(() => _authed = true));
+    switch (_state) {
+      case _AppState.loggedOut:
+        return GoogleLoginScreen(onResult: _handleLoginResult);
+      case _AppState.onboarding:
+        return PostAuthOnboardingScreen(
+          needsDob: true,
+          onDone: () => setState(() => _state = _AppState.main),
+        );
+      case _AppState.main:
+        return const MainShell();
+    }
   }
 }

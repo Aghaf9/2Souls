@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:typed_data';
 import '../models/app_user.dart';
 import 'auth_service.dart';
@@ -10,14 +9,20 @@ import 'auth_service.dart';
 // All Firestore read/write operations for the logged-in user's profile.
 // Keeps a local in-memory cache (_current) so the UI can read it
 // synchronously between Firestore updates.
+//
+// ⚠️  PHOTO UPLOAD DISABLED UNTIL LAUNCH — Firebase Storage now requires
+// the Blaze (pay-as-you-go) plan to provision a bucket at all, which
+// means putting a card on file. Deferred deliberately until launch
+// rather than doing that now. uploadProfilePhoto() is stubbed below —
+// search "RE-ENABLE AT LAUNCH" for the exact spot to restore once
+// Storage is provisioned (see photo_service.dart for the same pattern).
 // ---------------------------------------------------------------------------
 
 class UserService {
   UserService._();
   static final UserService instance = UserService._();
 
-  final _db      = FirebaseFirestore.instance;
-  final _storage = FirebaseStorage.instance;
+  final _db = FirebaseFirestore.instance;
 
   AppUser? _current;
   AppUser? get current => _current;
@@ -58,27 +63,27 @@ class UserService {
     await loadCurrentUser();
   }
 
-  /// Upload a profile photo and store the download URL in Firestore.
-  /// Returns the download URL on success.
+  /// PRE-LAUNCH STUB — always returns null and writes nothing.
+  ///
+  /// RE-ENABLE AT LAUNCH: once Firebase Storage is provisioned (Blaze
+  /// plan active), restore this to actually upload via
+  /// FirebaseStorage.instance and call updateProfile({'photoUrl': url}).
+  /// Until then this deliberately does nothing so the app never depends
+  /// on a Storage bucket that doesn't exist yet.
   Future<String?> uploadProfilePhoto(Uint8List bytes, String filename) async {
-    final uid = AuthService.instance.currentUid;
-    if (uid == null) return null;
-    try {
-      final ref = _storage.ref('profile_photos/$uid/$filename');
-      final task = await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
-      final url = await task.ref.getDownloadURL();
-      await updateProfile({'photoUrl': url});
-      return url;
-    } catch (e) {
-      return null;
-    }
+    // ignore: avoid_print
+    print(
+      'uploadProfilePhoto: skipped — Firebase Storage not provisioned '
+      'yet (deferred until launch, see UserService header comment).',
+    );
+    return null;
   }
 
   /// Update pool membership fields.
   Future<void> setPoolMembership({bool? shortTerm, bool? longTerm}) async {
     final fields = <String, dynamic>{};
     if (shortTerm != null) fields['inShortTermPool'] = shortTerm;
-    if (longTerm  != null) fields['inLongTermPool']  = longTerm;
+    if (longTerm != null) fields['inLongTermPool'] = longTerm;
     if (fields.isNotEmpty) await updateProfile(fields);
   }
 
