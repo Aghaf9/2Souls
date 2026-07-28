@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import '../theme/app_colors.dart';
 import '../widgets/bottom_nav.dart';
-import '../widgets/night_sky_background.dart';
 import 'home_screen.dart';
 import 'discover_screen.dart';
 import 'messages_screen.dart';
@@ -27,13 +25,11 @@ class _MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // Transparent so the night sky from MaterialApp.builder shows through
       backgroundColor: Colors.transparent,
-      body: Stack(
-        children: [
-          // Single night sky instance behind all tabs — same sky everywhere
-          const Positioned.fill(child: NightSkyBackground()),
-          IndexedStack(index: _currentIndex, children: _tabs),
-        ],
+      body: IndexedStack(
+        index: _currentIndex,
+        children: _tabs,
       ),
       bottomNavigationBar: BottomNav(
         currentIndex: _currentIndex,

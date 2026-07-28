@@ -55,7 +55,7 @@ class _GoogleLoginScreenState extends State<GoogleLoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.bgDark,
+      backgroundColor: Colors.transparent,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 32),

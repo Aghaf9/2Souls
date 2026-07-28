@@ -56,7 +56,6 @@ class DefaultFirebaseOptions {
     projectId: 'twosouls-app',
     storageBucket: 'twosouls-app.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyDijiK2DqaB4O1pv05xrfctTGgZ5g_Tc0I',
     appId: '1:448340752670:ios:ffebd7d7ee1bed3318310f',
@@ -65,7 +64,6 @@ class DefaultFirebaseOptions {
     storageBucket: 'twosouls-app.firebasestorage.app',
     iosBundleId: 'com.example.twosouls',
   );
-
   static const FirebaseOptions macos = FirebaseOptions(
     apiKey: 'AIzaSyDijiK2DqaB4O1pv05xrfctTGgZ5g_Tc0I',
     appId: '1:448340752670:ios:ffebd7d7ee1bed3318310f',

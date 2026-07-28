@@ -7,6 +7,7 @@ import 'services/auth_service.dart';
 import 'screens/auth/google_login_screen.dart';
 import 'screens/auth/post_auth_onboarding_screen.dart';
 import 'screens/main_shell.dart';
+import 'widgets/night_sky_background.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,6 +19,7 @@ void main() async {
 
 class TwoSoulsApp extends StatelessWidget {
   const TwoSoulsApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -25,13 +27,32 @@ class TwoSoulsApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: Colors.transparent,
+        // Keep dark (not transparent) so Scaffolds without explicit
+        // backgroundColor still look correct — only MainShell/NightSkyScaffold
+        // explicitly go transparent to let the sky through.
+        scaffoldBackgroundColor: AppColors.bgDark,
         colorScheme: ColorScheme.dark(
           primary: AppColors.accent,
           secondary: AppColors.accentSoft,
           surface: const Color(0xFF0D1033),
         ),
       ),
+      // NightSkyBackground rendered once here, behind every route in the
+      // entire app — login screen, dialogs, sheets, everything.
+      // Each Scaffold's own backgroundColor on top of this is set to
+      // Colors.transparent in screens that want the sky to show through,
+      // or left as AppColors.bgDark (which is almost identical) for screens
+      // that just want a flat dark background.
+      builder: (context, child) {
+        return Stack(
+          children: [
+            // Night sky — root of the entire widget tree
+            const Positioned.fill(child: NightSkyBackground()),
+            // App content on top
+            if (child != null) child,
+          ],
+        );
+      },
       home: const _AppRouter(),
     );
   }
@@ -39,6 +60,7 @@ class TwoSoulsApp extends StatelessWidget {
 
 class _AppRouter extends StatefulWidget {
   const _AppRouter();
+
   @override
   State<_AppRouter> createState() => _AppRouterState();
 }

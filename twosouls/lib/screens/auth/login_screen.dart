@@ -71,7 +71,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.bgDark,
+      backgroundColor: Colors.transparent,
       body: Column(
         children: [
           // Flow gradient header with logo
