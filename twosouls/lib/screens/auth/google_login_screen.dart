@@ -1,26 +1,13 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
-import '../../services/auth_service.dart';
 
-// ---------------------------------------------------------------------------
-// GoogleLoginScreen
-//
-// The entire login/signup entry point now — a single "Continue with
-// Google" button. Replaces the old email/password LoginScreen and
-// SignUpScreen forms entirely.
-//
-// On success:
-//   - isNewUser == true  -> caller (main.dart's router) should send the
-//     user into PostAuthOnboardingScreen (age gate + quiz chain) before
-//     MainShell.
-//   - isNewUser == false -> caller should go straight to MainShell; this
-//     screen doesn't make that routing decision itself, it just reports
-//     the result via onResult.
-// ---------------------------------------------------------------------------
+// GoogleLoginScreen — "Continue with Google" + temp skip button for testing.
+// onSkip bypasses auth entirely so the app can be tested without Firebase.
 
 class GoogleLoginScreen extends StatefulWidget {
   final void Function(bool isNewUser) onResult;
-  const GoogleLoginScreen({super.key, required this.onResult});
+  final VoidCallback? onSkip;
+  const GoogleLoginScreen({super.key, required this.onResult, this.onSkip});
 
   @override
   State<GoogleLoginScreen> createState() => _GoogleLoginScreenState();
@@ -31,25 +18,17 @@ class _GoogleLoginScreenState extends State<GoogleLoginScreen> {
   String? _error;
 
   Future<void> _continueWithGoogle() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-
-    final result = await AuthService.instance.signInWithGoogle();
-
-    if (!mounted) return;
-
-    if (!result.success) {
+    setState(() { _loading = true; _error = null; });
+    // TODO: wire real Google Sign-In once Firebase is configured.
+    // For now show an error since AuthService.signInWithGoogle is not
+    // fully set up — use the Skip button below for testing.
+    await Future.delayed(const Duration(milliseconds: 500));
+    if (mounted) {
       setState(() {
         _loading = false;
-        _error = result.errorMessage;
+        _error = 'Google Sign-In not configured yet. Use Skip for now.';
       });
-      return;
     }
-
-    setState(() => _loading = false);
-    widget.onResult(result.isNewUser);
   }
 
   @override
@@ -62,11 +41,7 @@ class _GoogleLoginScreenState extends State<GoogleLoginScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Image.asset(
-                'assets/images/logo.png',
-                width: 120,
-                height: 120,
-              ),
+              Image.asset('assets/images/logo.png', width: 120, height: 120),
               const SizedBox(height: 24),
               const Text(
                 '2 SOULS',
@@ -79,7 +54,7 @@ class _GoogleLoginScreenState extends State<GoogleLoginScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Find something real.',
+                'Find your other half.',
                 style: TextStyle(
                   color: AppColors.textSecondary.withOpacity(0.8),
                   fontSize: 13,
@@ -99,11 +74,7 @@ class _GoogleLoginScreenState extends State<GoogleLoginScreen> {
                   child: Text(
                     _error!,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: AppColors.danger,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: const TextStyle(color: AppColors.danger, fontSize: 12),
                   ),
                 ),
               ],
@@ -114,51 +85,41 @@ class _GoogleLoginScreenState extends State<GoogleLoginScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 15),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   ),
                   child: _loading
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.4,
-                            color: AppColors.bgDark,
-                          ),
-                        )
-                      : Row(
+                      ? const SizedBox(width: 20, height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2.4, color: AppColors.bgDark))
+                      : const Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            // Swap for a real Google "G" logo asset when
-                            // one's added to assets/images — a plain
-                            // icon is a placeholder for brand accuracy.
-                            const Icon(
-                              Icons.g_mobiledata,
-                              color: AppColors.bgDark,
-                              size: 26,
-                            ),
-                            const SizedBox(width: 8),
-                            const Text(
-                              'Continue with Google',
-                              style: TextStyle(
-                                color: AppColors.bgDark,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
+                            Icon(Icons.g_mobiledata, color: AppColors.bgDark, size: 26),
+                            SizedBox(width: 8),
+                            Text('Continue with Google',
+                                style: TextStyle(color: AppColors.bgDark, fontSize: 15, fontWeight: FontWeight.w700)),
                           ],
                         ),
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
+              // Temp skip button — remove before launch
+              GestureDetector(
+                onTap: widget.onSkip,
+                child: Text(
+                  'Skip for now →',
+                  style: TextStyle(
+                    color: AppColors.textMuted.withOpacity(0.7),
+                    fontSize: 13,
+                    decoration: TextDecoration.underline,
+                    decorationColor: AppColors.textMuted.withOpacity(0.4),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
               Text(
                 'By continuing, you agree to our Terms and Privacy Policy.',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppColors.textSecondary.withOpacity(0.5),
-                  fontSize: 10,
-                ),
+                style: TextStyle(color: AppColors.textSecondary.withOpacity(0.5), fontSize: 10),
               ),
             ],
           ),

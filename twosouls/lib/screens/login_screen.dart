@@ -1,221 +1,228 @@
 import 'package:flutter/material.dart';
-import '../theme/app_colors.dart';
+import '../../services/auth_service.dart';
+import '../../theme/app_colors.dart';
+import 'auth_field.dart';
+import 'signup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final VoidCallback? onSuccess;
+  const LoginScreen({super.key, this.onSuccess});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final emailController = TextEditingController();
-  final passwordController = TextEditingController();
-
-  bool hidePassword = true;
+  final _emailCtrl = TextEditingController();
+  final _passwordCtrl = TextEditingController();
+  bool _loading = false;
+  bool _obscure = true;
+  String? _error;
 
   @override
   void dispose() {
-    emailController.dispose();
-    passwordController.dispose();
+    _emailCtrl.dispose();
+    _passwordCtrl.dispose();
     super.dispose();
   }
 
-  void login() {
-    final email = emailController.text.trim();
-    final password = passwordController.text.trim();
-
-    if (email.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter email and password')),
-      );
-      return;
+  Future<void> _signIn() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    final result = await AuthService.instance.signIn(
+      email: _emailCtrl.text,
+      password: _passwordCtrl.text,
+    );
+    if (mounted) {
+      setState(() {
+        _loading = false;
+        _error = result.errorMessage;
+      });
+      if (result.success) widget.onSuccess?.call();
     }
-
-    Navigator.pushReplacementNamed(context, '/home');
   }
 
-  Widget socialButton({
-    required String label,
-    required IconData icon,
-    required VoidCallback onPressed,
-  }) {
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton.icon(
-        onPressed: onPressed,
-        icon: Icon(icon, color: Colors.white, size: 28),
-        label: Text(
-          label,
-          style: const TextStyle(color: Colors.white, fontSize: 16),
-        ),
-        style: OutlinedButton.styleFrom(
-          backgroundColor: Colors.black.withAlpha(80),
-          side: const BorderSide(color: Color(0x669EC5FF)),
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-        ),
-      ),
+  Future<void> _resetPassword() async {
+    if (_emailCtrl.text.trim().isEmpty) {
+      setState(() => _error = 'Enter your email first.');
+      return;
+    }
+    final result = await AuthService.instance.sendPasswordReset(
+      _emailCtrl.text,
     );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.success
+                ? 'Reset email sent!'
+                : result.errorMessage ?? 'Error',
+          ),
+          backgroundColor: result.success
+              ? AppColors.success
+              : AppColors.danger,
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
+      backgroundColor: Colors.transparent,
+      body: Column(
         children: [
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/archerPic.png',
-              fit: BoxFit.cover,
-              alignment: Alignment.topCenter,
-            ),
-          ),
-
-          Positioned.fill(
-            child: Container(
-              color: Colors.black.withAlpha(90),
-            ),
-          ),
-
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                children: [
-                  const Spacer(),
-
-
-                  Transform.translate(
-                    offset: const Offset(0, -40),
-                    child: const Text(
-                      '2souls',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 50,
-                        fontWeight: FontWeight.w300,
-                        letterSpacing: 4,
-                      ),
+          // Flow gradient header with logo
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(28, 64, 28, 36),
+            decoration: const BoxDecoration(gradient: kFlowGradientVertical),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: ClipOval(
+                    child: Image.asset(
+                      'assets/images/logo.png',
+                      width: 90,
+                      height: 90,
+                      fit: BoxFit.cover,
+                    ),
                   ),
-              ),
-
-
-                  const SizedBox(height: 8),
-
-                  const Text(
-                    'Find the soul that matches yours',
+                ),
+                const SizedBox(height: 16),
+                const Center(
+                  child: Text(
+                    '2 SOULS',
                     style: TextStyle(
-                      color: Color(0xFF9EC5FF),
-                      fontSize: 16,
+                      color: AppColors.moonlight,
+                      fontSize: 26,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 6,
                     ),
                   ),
-
-                  const SizedBox(height: 36),
-
-                  TextField(
-                    controller: emailController,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      labelText: 'Email',
-                      labelStyle: const TextStyle(color: Color(0xFF9EC5FF)),
-                      prefixIcon: const Icon(
-                        Icons.email_outlined,
-                        color: Color(0xFF9EC5FF),
-                      ),
-                      filled: true,
-                      fillColor: Colors.black.withAlpha(90),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(18),
-                      ),
+                ),
+                const SizedBox(height: 4),
+                Center(
+                  child: Text(
+                    'Find your other half',
+                    style: TextStyle(
+                      color: AppColors.textSecondary.withOpacity(0.8),
+                      fontSize: 12,
+                      letterSpacing: 1.5,
                     ),
                   ),
+                ),
+              ],
+            ),
+          ),
 
-                  const SizedBox(height: 16),
-
-                  TextField(
-                    controller: passwordController,
-                    obscureText: hidePassword,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      labelText: 'Password',
-                      labelStyle: const TextStyle(color: Color(0xFF9EC5FF)),
-                      prefixIcon: const Icon(
-                        Icons.lock_outline,
-                        color: Color(0xFF9EC5FF),
-                      ),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          hidePassword
-                              ? Icons.visibility_off_outlined
-                              : Icons.visibility_outlined,
-                          color: const Color(0xFF9EC5FF),
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            hidePassword = !hidePassword;
-                          });
-                        },
-                      ),
-                      filled: true,
-                      fillColor: Colors.black.withAlpha(90),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(18),
-                      ),
+          // Form
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(28),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 8),
+                  Text(
+                    'Welcome back',
+                    style: TextStyle(
+                      color: AppColors.textSecondary.withOpacity(0.7),
+                      fontSize: 14,
                     ),
                   ),
-
                   const SizedBox(height: 24),
-
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: login,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primaryBlue,
-                        padding: const EdgeInsets.symmetric(vertical: 18),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(18),
+                  AuthField(
+                    controller: _emailCtrl,
+                    label: 'Email',
+                    keyboardType: TextInputType.emailAddress,
+                  ),
+                  const SizedBox(height: 14),
+                  AuthField(
+                    controller: _passwordCtrl,
+                    label: 'Password',
+                    obscure: _obscure,
+                    suffix: IconButton(
+                      icon: Icon(
+                        _obscure
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                        color: AppColors.textSecondary,
+                        size: 18,
+                      ),
+                      onPressed: () => setState(() => _obscure = !_obscure),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: GestureDetector(
+                      onTap: _resetPassword,
+                      child: Text(
+                        'Forgot password?',
+                        style: TextStyle(
+                          color: AppColors.accent.withOpacity(0.8),
+                          fontSize: 12,
                         ),
                       ),
-                      child: const Text(
-                        'Login',
-                        style: TextStyle(fontSize: 20, color: Colors.white),
+                    ),
+                  ),
+                  if (_error != null) ...[
+                    const SizedBox(height: 16),
+                    ErrorBox(message: _error!),
+                  ],
+                  const SizedBox(height: 28),
+                  AuthButton(
+                    label: 'Sign In',
+                    loading: _loading,
+                    onTap: _signIn,
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        "Don't have an account? ",
+                        style: TextStyle(
+                          color: AppColors.textSecondary.withOpacity(0.6),
+                          fontSize: 13,
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const SignUpScreen(),
+                          ),
+                        ),
+                        child: const Text(
+                          'Sign Up',
+                          style: TextStyle(
+                            color: AppColors.accent,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  // Dev shortcut — skip auth for testing
+                  GestureDetector(
+                    onTap: () => widget.onSuccess?.call(),
+                    child: Center(
+                      child: Text(
+                        'Skip for now →',
+                        style: TextStyle(
+                          color: AppColors.textMuted.withOpacity(0.6),
+                          fontSize: 12,
+                        ),
                       ),
                     ),
                   ),
-
-                  const SizedBox(height: 18),
-
-                  socialButton(
-                    label: 'Continue with Google',
-                    icon: Icons.g_mobiledata,
-                    onPressed: () {},
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  socialButton(
-                    label: 'Continue with Meta',
-                    icon: Icons.facebook,
-                    onPressed: () {},
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  TextButton(
-                    onPressed: () {
-                      Navigator.pushNamed(context, '/signup');
-                      },
-                      child: const Text(
-                      "Don't have an account? Sign up",
-                      style: TextStyle(color: Color(0xFF9EC5FF)),
-                    ),
-                  ),
-              
-
-                  const SizedBox(height: 24),
                 ],
               ),
             ),
